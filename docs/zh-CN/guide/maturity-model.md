@@ -57,6 +57,14 @@ Feedback 回路已经建立。智能体可以运行 tests，有 linter 和 type 
 
 Loop 在 runtime 闭合。Gate hooks 让破坏性操作不可能发生，而不只是「不建议」；feedback hooks 在每次 edit 时执行 lint 和 format，就在会话内完成。Guides、sensors 和 guardrails 覆盖全部六个 dimensions。一个错误现在必须依次通过 rules、on-edit hooks、tests、type checker、CI*以及* gates — 大多数情况下无需人类介入。
 
+## Level 何时会被 capped（封顶）
+
+一个 level 的 requirements 默认所有 dimensions 都在参与评分。团队可以通过 `.harness-score.json` 的 `extends`/`rules`（见 [指标与代码](./metrics-and-codes#team-customization)）排除特定 checks，甚至整个 dimension — 前提是出于 policy 要求的结构性原因，而不是单纯的偏好。
+
+如果这种排除让某个 level 依赖的 dimension 变得完全不适用，scanner 会把该 level 报告为 **capped**，而不是假装这只是又一个待补的 gap。L4 是最清晰的例子：它由 Hooks & Guardrails dimension *定义*，所以采用 `no-hooks` preset 的仓库可以自由把其他 dimensions 都拉满，但 L4 会一直 capped — 不是「0%，继续努力」，而是「在当前配置下无法达到，原因如下」。其他每个 dimension 的分数完全不受影响。
+
+这是模型在保持诚实，不是惩罚：下文的「必要条件，非充分条件」本来就意味着高分不是保证 — capped level 只是把同一个原则，套用到团队自己做出的、已被公开披露的选择上。
+
 ## 如何解读分数
 
 两个仓库都可能拿到 65%，但形态可能截然不同 — 这正是 levels 按 dimensions 门禁的原因：

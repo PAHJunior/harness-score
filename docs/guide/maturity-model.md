@@ -91,6 +91,27 @@ the session. Guides, sensors, and guardrails cover all six dimensions. A
 mistake now has to get past the rules, the on-edit hooks, the tests, the
 type checker, CI, *and* the gates — mostly without any human in the loop.
 
+## When a level is capped
+
+A level's requirements assume every dimension is in play. A team can
+exclude specific checks — or an entire dimension — via
+`.harness-score.json`'s `extends`/`rules` (see
+[Metrics & Codes](./metrics-and-codes#team-customization)), for a
+structural reason a policy demands, not a preference.
+
+If that exclusion empties out a dimension a level depends on, the scanner
+reports the level as **capped** instead of pretending it's just another gap
+to close. L4 is the clearest example: it's *defined* by the Hooks &
+Guardrails dimension, so a repository under the `no-hooks` preset can climb
+every other dimension freely, but L4 stays capped — not "0%, keep trying,"
+but "not reachable under your current configuration, and here's exactly
+why." Every other dimension's score is completely unaffected.
+
+This is the model staying honest, not a penalty: "necessary, not
+sufficient" (below) already means a high score is no guarantee — a capped
+level is the same idea applied to a team's own deliberate, disclosed choice
+about what applies to them.
+
 ## Reading a score
 
 Two repositories can both score 65% with very different shapes — that's why

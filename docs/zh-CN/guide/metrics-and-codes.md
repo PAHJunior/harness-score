@@ -137,7 +137,11 @@
   "extraRoots": [
     { "id": "team-shared", "path": "../shared-harness" }
   ],
-  "gate": "maturity"
+  "gate": "maturity",
+  "extends": ["no-hooks"],
+  "rules": {
+    "HYG-05": "off"
+  }
 }
 ```
 
@@ -147,6 +151,29 @@
 | `scopes.system` | boolean | `false` | 包含系统级 overlay |
 | `extraRoots` | `{ id, path }[]` | `[]` | 合并到 effective 的额外 harness 树 |
 | `gate` | `"maturity"` \| `"effective"` | `"maturity"` | `--min-level` 使用的分数 |
+| `extends` | `string[]` | `[]` | 要应用的具名 preset（见下文） |
+| `rules` | `Record<checkId, severity>` | `{}` | 按 check 的 severity override，应用于 `extends` 中每个 preset 之后 |
+
+优先级：**CLI 标志 → Action 输入 → 配置文件 → 默认值**。`extends`/`rules` 在本版本中仅限配置文件使用 — 目前没有对应的 `--extends`/`--rule` CLI 标志或 Action 输入；可用 `--config <path>` 指向一个定义了它们的 `.harness-score.json`。
+
+### 团队定制：`extends` 与 `rules` {#team-customization}
+
+这套词汇直接借用自 ESLint，因为大多数团队已经熟悉它：
+
+- **`rules`** 按 check ID 覆盖单个 check 的 severity：`"HYG-05": "off"`。本版本 severity 只接受 `"off"` 或 `"error"` — `"error"` 是每个 check 的隐式默认值，`"off"` 会把该 check 同时从其 dimension 分数的**分子和分母**中移除（结构性排除，永不计为 fail）。`"warn"` 是一个被识别但目前故意拒绝的值，会给出清晰的「尚未支持」错误 — 预留给未来的 advisory、non-blocking 模式。
+- **`extends`** 应用一个由 maintainer 精心维护的具名 preset — 是经过版本管理、PR review 的一组 `rules` overrides，而不是自由裁量的 per-repo 例外。这保持了与保护 checks 目录相同的治理方式：提出新 preset 需要走 review（见 [CONTRIBUTING.md](https://github.com/paladini/harness-score/blob/main/CONTRIBUTING.md#proposing-a-preset)），而不是静默的本地 opt-out。`extends` 中的 preset 按数组顺序应用，`rules` 中任何显式条目始终优先于 preset。
+
+任何被 `extends`/`rules` 排除的 check 都始终会被披露 — 在终端输出中（`Preset: ...` 行）、Markdown 报告中（`**Preset:**` 行以及 checks 表格中的 `➖` 状态）、以及 `--json` 的 `preset` 字段中 — 绝不会被静默隐藏在某个 flag 后面。
+
+有一个例外，是刻意为之的：`HYG-03`、`HYG-04`、`HYG-06` — 这些检测「实际泄露或暴露的凭证」的 checks — 无论通过 `rules` 还是 preset，都永远不能设为 `"off"`。这套配置格式里的其他一切都依赖披露与 PR review 来维护 integrity；这三个是唯一不可协商的例外。
+
+#### 内置 preset
+
+| Preset | 效果 | 原因 |
+|---|---|---|
+| `no-hooks` {#preset-no-hooks} | 将 `HKS-01`–`HKS-05`（整个 Hooks & Guardrails dimension，占 108 分中的 14 分）设为 `"off"` | 用于本地 hook 脚本执行被 policy 禁止的环境 — 被锁定的 dev container、受监管的组织、没有权限安装 hooks 的共享 runner。这类场景下 guardrail 只能在 CI 中生效。|
+
+排除整个 dimension 有一个值得提前知道的、诚实的后果：由于 **L4 · Self-correcting** 就是由 runtime guardrail hooks *定义*的（见[成熟度模型](./maturity-model)），采用 `no-hooks` preset 的仓库永远无法达到 L4 — 该 level 会变成 **capped**，而不是「未通过」。`report.level.capped` 为 `true`，`report.level.capReason` 解释原因；其他所有 dimension 的分数完全不受影响。这是 scanner 在「self-correcting」这个词的含义上保持诚实，而不是对排除 hooks 的惩罚。
 
 优先级：**CLI 标志 → Action 输入 → 配置文件 → 默认值**。
 
@@ -182,6 +209,10 @@ Outputs：`level`、`level-name`、`percent`（maturity）；`effective-level`�
 | `gate` | `"maturity"` 或 `"effective"` |
 | `resolvedRoots` | overlay 的可选 `{ scope, absPath }` 列表 |
 | `level`、`score`、`dimensions`、`checks` | **maturity** 快照 |
+| `preset` | `{ extends, rules, resolved }` — 本次 scan 实际应用的团队定制；`resolved` 只列出 severity 不同于默认值的 checks |
+| `level.capped`、`level.capReason` | 当下一 level 的某个 blocking requirement 在当前配置下永远无法满足时（例如其 dimension 被 preset 排除），`capped` 为 `true`；`capReason` 说明原因 |
+| `dimensions[].applicable` | 仅当该 dimension 中所有 check 都解析为 `"off"` 时为 `false` |
+| `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — 本次 scan 对该 check 使用的最终 severity |
 | `effective` | 相同结构：`{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | **repo** 中看到的工具（仅供参考） |
 | `truncated` | 遍历达到文件上限 |
