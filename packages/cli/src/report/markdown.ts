@@ -16,6 +16,12 @@ function renderDiffSection(diff: ReportDiff): string[] {
     );
     lines.push('');
   }
+  if (diff.presetChanged) {
+    lines.push(
+      '> ⚠ Baseline used a different extends/rules config — some deltas below may reflect that, not repository changes.',
+    );
+    lines.push('');
+  }
   lines.push(
     `**Level:** L${diff.level.before} · ${diff.level.beforeName} → ` +
       `L${diff.level.after} · ${diff.level.afterName} (${signed(diff.level.delta)})`,

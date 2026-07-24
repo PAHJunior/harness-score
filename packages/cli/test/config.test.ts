@@ -5,6 +5,8 @@ import { describe, expect, test } from 'vitest';
 import {
   DEFAULT_CONFIG,
   loadConfigFile,
+  PRESET_REGISTRY,
+  PROTECTED_CHECKS,
   parseConfigObject,
   parseScopeFlagList,
   resolveScanConfig,
@@ -68,6 +70,29 @@ describe('parseConfigObject', () => {
     expect(() => parseConfigObject({ rules: { 'HKS-01': 'disabled' } }, 'test')).toThrow(
       /severity must be "off" or "error"/,
     );
+  });
+
+  test.each([...PROTECTED_CHECKS])('rejects turning off protected check %s', (checkId) => {
+    expect(() => parseConfigObject({ rules: { [checkId]: 'off' } }, 'test')).toThrow(
+      /can never be set to "off"/,
+    );
+  });
+
+  test('a protected check can still be set to "error" explicitly (a no-op, but not rejected)', () => {
+    const [checkId] = [...PROTECTED_CHECKS];
+    expect(parseConfigObject({ rules: { [checkId!]: 'error' } }, 'test').rules).toEqual({
+      [checkId!]: 'error',
+    });
+  });
+});
+
+describe('PRESET_REGISTRY never waives a protected check', () => {
+  test('no built-in preset sets a protected check to "off"', () => {
+    for (const [name, preset] of Object.entries(PRESET_REGISTRY)) {
+      for (const checkId of PROTECTED_CHECKS) {
+        expect(preset[checkId], `${name} preset must not exclude ${checkId}`).not.toBe('off');
+      }
+    }
   });
 });
 

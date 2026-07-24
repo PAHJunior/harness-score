@@ -170,6 +170,8 @@ Borrowed straight from ESLint's own vocabulary, because it's a vocabulary most t
 
 Every check excluded by `extends`/`rules` is always disclosed — in the terminal output (`Preset: ...` line), in the Markdown report (`**Preset:**` line and a `➖` status in the checks table), and in `--json`'s `preset` field — never silently hidden behind a flag.
 
+One exception, on purpose: `HYG-03`, `HYG-04`, and `HYG-06` — the checks that detect actively leaked or exposed credentials — can never be set to `"off"`, from either `rules` or a preset. Everything else in this config format leans on disclosure and PR review for integrity; these three are the one place that isn't negotiable.
+
 #### Built-in presets
 
 | Preset | Effect | Why |

@@ -205,4 +205,9 @@ describe('renderMarkdown', () => {
     const out = renderMarkdown(makeReport(), makeDiff({ maturityModelChanged: true }));
     expect(out).toContain('Baseline is from a different tool version');
   });
+
+  test('diff warns when presetChanged is true', () => {
+    const out = renderMarkdown(makeReport(), makeDiff({ presetChanged: true }));
+    expect(out).toContain('Baseline used a different extends/rules config');
+  });
 });

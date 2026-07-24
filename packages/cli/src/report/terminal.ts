@@ -40,6 +40,13 @@ function renderDiffSection(diff: ReportDiff): string[] {
       ),
     );
   }
+  if (diff.presetChanged) {
+    lines.push(
+      yellow(
+        `  ${WARN} Baseline used a different extends/rules config ${MIDDOT} some deltas below may reflect that, not repository changes.`,
+      ),
+    );
+  }
   lines.push(
     `    Level: L${diff.level.before} ${MIDDOT} ${diff.level.beforeName} ${ARROW} ` +
       `L${diff.level.after} ${MIDDOT} ${diff.level.afterName} (${signed(diff.level.delta)})`,

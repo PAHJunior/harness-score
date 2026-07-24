@@ -72,6 +72,15 @@ const ALLOWED_SCOPE_KEYS = new Set(['user', 'system']);
 const VALID_SEVERITIES = new Set(['off', 'error']);
 const CHECK_IDS = new Set(ALL_CHECKS.map((c) => c.id));
 
+/**
+ * Checks that detect actively leaked/exposed credentials — never eligible for
+ * "off", from either a local `rules` override or a preset, regardless of how
+ * the exclusion is justified. This is the one thing "customizable, but still
+ * serious" can't bend on: nothing in this config format may silence an actual
+ * secret-leak detector, only disclosure-and-review protects everything else.
+ */
+export const PROTECTED_CHECKS = new Set(['HYG-03', 'HYG-04', 'HYG-06']);
+
 export interface CliConfigOverrides {
   configPath?: string | null;
   /** When set, replaces config-file scope toggles. */
@@ -177,7 +186,13 @@ function parseRules(value: unknown, source: string): Record<string, Severity> {
     if (!CHECK_IDS.has(checkId)) {
       configError(`${source}.rules: unknown check ID "${checkId}"`);
     }
-    rules[checkId] = parseSeverityValue(severity, source, checkId);
+    const parsed = parseSeverityValue(severity, source, checkId);
+    if (parsed === 'off' && PROTECTED_CHECKS.has(checkId)) {
+      configError(
+        `${source}.rules["${checkId}"]: this check detects leaked/exposed credentials and can never be set to "off"`,
+      );
+    }
+    rules[checkId] = parsed;
   }
   return rules;
 }

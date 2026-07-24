@@ -181,6 +181,11 @@ describe('renderTerminal', () => {
     expect(out).toContain('Baseline is from a different tool version');
   });
 
+  test('diff section warns when presetChanged is true', () => {
+    const out = renderTerminal(makeReport(), makeDiff({ presetChanged: true }));
+    expect(out).toContain('Baseline used a different extends/rules config');
+  });
+
   test('diff section renders only non-zero dimension deltas', () => {
     const diff = makeDiff({
       dimensions: DIMENSIONS.map((d, i) => ({

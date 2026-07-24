@@ -170,6 +170,8 @@ O vocabulário é emprestado diretamente do ESLint, porque é um vocabulário qu
 
 Todo check excluído por `extends`/`rules` é sempre divulgado — na saída do terminal (linha `Preset: ...`), no relatório Markdown (linha `**Preset:**` e status `➖` na tabela de checks) e no campo `preset` do `--json` — nunca escondido silenciosamente atrás de uma flag.
 
+Uma exceção, proposital: `HYG-03`, `HYG-04` e `HYG-06` — os checks que detectam credenciais efetivamente vazadas ou expostas — nunca podem ser definidos como `"off"`, nem via `rules` nem via preset. Todo o resto nesse formato de config se apoia em divulgação e revisão de PR pra manter a integridade; esses três são o único ponto que não é negociável.
+
 #### Presets nativos
 
 | Preset | Efeito | Por quê |
