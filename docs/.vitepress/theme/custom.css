@@ -109,25 +109,42 @@
   height: 24px;
 }
 
-.VPNavBarMenuLink {
+.VPNavBar .VPNavBarMenuLink {
   color: var(--hs-header-ink);
   font-size: 13px;
   font-weight: 600;
 }
 
-.VPNavBarMenuLink:hover,
-.VPNavBarMenuLink.active {
+.VPNavBar .VPNavBarMenuLink:hover,
+.VPNavBar .VPNavBarMenuLink.active {
   color: var(--hs-header-green);
 }
 
-.VPNavBarMenuLink.active::after {
+.VPNavBar .VPNavBarMenuLink.active::after {
   background-color: var(--hs-header-green);
 }
 
-.VPNavBarAppearance,
-.VPNavBarTranslations,
-.VPNavBarSocialLinks {
+.VPNavBar .VPFlyout .button,
+.VPNavBar .VPFlyout .text,
+.VPNavBar .VPSocialLink {
   color: var(--hs-header-ink);
+}
+
+.VPNavBar .VPFlyout:hover .text,
+.VPNavBar .VPSocialLink:hover {
+  color: var(--hs-header-green);
+}
+
+.VPNavBar .VPFlyout .icon {
+  fill: currentColor;
+}
+
+.VPNavBar .VPNavBarAppearance {
+  --vp-input-border-color: var(--hs-header-ink);
+  --vp-input-switch-bg-color: var(--hs-header-paper);
+  --vp-c-neutral-inverse: var(--hs-header-ink);
+  --vp-c-text-1: var(--hs-header-paper);
+  --vp-c-text-2: var(--hs-header-paper);
 }
 
 @media (max-width: 640px) {
