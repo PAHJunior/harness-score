@@ -4,8 +4,15 @@ import { renderMarkdown } from '../src/report/markdown.js';
 import type { CheckResult, DimensionScore, Report, ScoreSnapshot } from '../src/types.js';
 import { DIMENSIONS } from '../src/types.js';
 
-function makeDimensions(): DimensionScore[] {
-  return DIMENSIONS.map((d) => ({ id: d.id, title: d.title, earned: 5, max: 20, percent: 25 }));
+function makeDimensions(applicableOverrides: Partial<Record<string, boolean>> = {}): DimensionScore[] {
+  return DIMENSIONS.map((d) => ({
+    id: d.id,
+    title: d.title,
+    earned: 5,
+    max: 20,
+    percent: 25,
+    applicable: applicableOverrides[d.id] ?? true,
+  }));
 }
 
 function makeCheck(overrides: Partial<CheckResult> = {}): CheckResult {
@@ -19,13 +26,14 @@ function makeCheck(overrides: Partial<CheckResult> = {}): CheckResult {
     evidence: 'No AGENTS.md found.',
     remediation: 'Create an AGENTS.md.',
     docsUrl: 'https://paladini.github.io/harness-score/guide/measure-and-improve#ctx-01',
+    severity: 'error',
     ...overrides,
   };
 }
 
 function makeSnapshot(overrides: Partial<ScoreSnapshot> = {}): ScoreSnapshot {
   return {
-    level: { index: 1, name: 'Documented', nextLevelGaps: [] },
+    level: { index: 1, name: 'Documented', nextLevelGaps: [], capped: false },
     score: { earned: 50, max: 108, percent: 46 },
     dimensions: makeDimensions(),
     checks: [makeCheck()],
@@ -48,6 +56,7 @@ function makeReport(overrides: Partial<Report> = {}): Report {
     dimensions: snapshot.dimensions,
     checks: snapshot.checks,
     effective: snapshot,
+    preset: { extends: [], rules: {}, resolved: [] },
     ...overrides,
   };
 }
@@ -64,6 +73,7 @@ function makeDiff(overrides: Partial<ReportDiff> = {}): ReportDiff {
     dimensions: DIMENSIONS.map((d) => ({ id: d.id, title: d.title, before: 0, after: 0, delta: 0 })),
     checksChanged: [],
     maturityModelChanged: false,
+    presetChanged: false,
     ...overrides,
   };
 }
@@ -102,14 +112,70 @@ describe('renderMarkdown', () => {
 
   test('shows the next-level-gaps line only when gaps exist', () => {
     const withGaps = renderMarkdown(
-      makeReport({ level: { index: 1, name: 'Documented', nextLevelGaps: ['context ≥ 60%'] } }),
+      makeReport({
+        level: { index: 1, name: 'Documented', nextLevelGaps: ['context ≥ 60%'], capped: false },
+      }),
     );
     expect(withGaps).toContain('**To reach L2:**');
 
     const noGaps = renderMarkdown(
-      makeReport({ level: { index: 4, name: 'Self-correcting', nextLevelGaps: [] } }),
+      makeReport({ level: { index: 4, name: 'Self-correcting', nextLevelGaps: [], capped: false } }),
     );
     expect(noGaps).not.toContain('**To reach L');
+  });
+
+  test('shows a capped note when the level is capped', () => {
+    const out = renderMarkdown(
+      makeReport({
+        level: {
+          index: 3,
+          name: 'Sensing',
+          nextLevelGaps: ['hooks ≥ 70%'],
+          capped: true,
+          capReason:
+            'L4 requires hooks ≥ 70%, which is not reachable: the "hooks" dimension has no applicable checks.',
+        },
+      }),
+    );
+    expect(out).toContain('Capped');
+    expect(out).toContain('not reachable');
+  });
+
+  test('renders N/A for a non-applicable dimension instead of a misleading 0%', () => {
+    const out = renderMarkdown(makeReport({ dimensions: makeDimensions({ hooks: false }) }));
+    expect(out).toContain('N/A (excluded by preset)');
+  });
+
+  test('shows a preset disclosure line only when preset.resolved is non-empty', () => {
+    const withPreset = renderMarkdown(
+      makeReport({
+        preset: {
+          extends: ['no-hooks'],
+          rules: {},
+          resolved: [{ id: 'HKS-01', severity: 'off', source: 'extends:no-hooks' }],
+        },
+      }),
+    );
+    expect(withPreset).toContain('**Preset:**');
+    expect(withPreset).toContain('no-hooks');
+
+    expect(renderMarkdown(makeReport())).not.toContain('**Preset:**');
+  });
+
+  test('an off-severity check gets a distinct status glyph, not ✅/❌', () => {
+    const out = renderMarkdown(
+      makeReport({ checks: [makeCheck({ id: 'HKS-01', passed: false, severity: 'off' })] }),
+    );
+    expect(out).toContain('➖');
+  });
+
+  test('an off-severity failing check is excluded from Recommended improvements', () => {
+    const out = renderMarkdown(
+      makeReport({
+        checks: [makeCheck({ id: 'HKS-01', passed: false, severity: 'off' }), makeCheck({ passed: true })],
+      }),
+    );
+    expect(out).not.toContain('## Recommended improvements');
   });
 
   test('diff table renders only changed dimensions', () => {

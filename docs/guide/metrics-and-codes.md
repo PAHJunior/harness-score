@@ -142,7 +142,11 @@ Optional JSON at the scan root (strict schema — unknown keys error):
   "extraRoots": [
     { "id": "team-shared", "path": "../shared-harness" }
   ],
-  "gate": "maturity"
+  "gate": "maturity",
+  "extends": ["no-hooks"],
+  "rules": {
+    "HYG-05": "off"
+  }
 }
 ```
 
@@ -152,8 +156,27 @@ Optional JSON at the scan root (strict schema — unknown keys error):
 | `scopes.system` | boolean | `false` | Include system-level overlay |
 | `extraRoots` | `{ id, path }[]` | `[]` | Extra harness trees merged into effective |
 | `gate` | `"maturity"` \| `"effective"` | `"maturity"` | Which score `--min-level` uses |
+| `extends` | `string[]` | `[]` | Named presets to apply (see below) |
+| `rules` | `Record<checkId, severity>` | `{}` | Per-check severity override, applied after every preset in `extends` |
 
-Precedence: **CLI flags → Action inputs → config file → defaults**.
+Precedence: **CLI flags → Action inputs → config file → defaults**. `extends`/`rules` are config-file-only in this release — there is no `--extends`/`--rule` CLI flag or Action input equivalent yet; use `--config <path>` to point at a `.harness-score.json` that sets them.
+
+### Team customization: `extends` and `rules` {#team-customization}
+
+Borrowed straight from ESLint's own vocabulary, because it's a vocabulary most teams already know:
+
+- **`rules`** overrides a single check's severity by ID: `"HYG-05": "off"`. Severity is `"off"` or `"error"` in this release — `"error"` is the implicit default for every check, and `"off"` removes the check from **both** the numerator and the denominator of its dimension's score (it's structurally excluded, never scored as a failure). `"warn"` is a recognized value that's deliberately rejected today with a clear "not supported yet" error — it's reserved for a future advisory, non-blocking mode.
+- **`extends`** applies a named, maintainer-curated preset — a versioned, PR-reviewed bundle of `rules` overrides, not a free-form per-repo waiver. This preserves the same governance that already protects the check catalog: proposing a new preset goes through review (see [CONTRIBUTING.md](https://github.com/paladini/harness-score/blob/main/CONTRIBUTING.md#proposing-a-preset)), not a silent local opt-out. Presets in `extends` are applied in array order, and any explicit `rules` entry always wins over a preset.
+
+Every check excluded by `extends`/`rules` is always disclosed — in the terminal output (`Preset: ...` line), in the Markdown report (`**Preset:**` line and a `➖` status in the checks table), and in `--json`'s `preset` field — never silently hidden behind a flag.
+
+#### Built-in presets
+
+| Preset | Effect | Why |
+|---|---|---|
+| `no-hooks` {#preset-no-hooks} | Sets `HKS-01`–`HKS-05` (the whole Hooks & Guardrails dimension, 14 of 108 points) to `"off"` | For environments where local hook script execution is disallowed by policy — locked-down dev containers, regulated orgs, shared runners without permission to install hooks. Guardrails there are enforced in CI only. |
+
+Excluding an entire dimension has one honest consequence worth knowing up front: because **L4 · Self-correcting** is *defined* by runtime guardrail hooks (see the [Maturity Model](./maturity-model)), a repository under `no-hooks` can never reach L4 — the level becomes **capped**, not "failed." `report.level.capped` is `true` and `report.level.capReason` explains why; every other dimension's score is completely unaffected. This is the scanner staying honest about what "self-correcting" means, not a penalty for excluding hooks.
 
 ## CLI flags (scan configuration)
 
@@ -190,5 +213,9 @@ Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effect
 | `effective` | Same shape: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | Tools seen in **repo** (informational) |
 | `truncated` | Walk hit file cap |
+| `preset` | `{ extends, rules, resolved }` — team customization actually applied; `resolved` lists only checks whose severity differs from the default |
+| `level.capped`, `level.capReason` | `capped` is `true` when a blocking requirement for the next level can never be met under the current config (e.g. its dimension was excluded by a preset); `capReason` explains why |
+| `dimensions[].applicable` | `false` only when every check in that dimension resolved to `"off"` |
+| `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — the resolved severity this scan used for that check |
 
 `--diff` compares **maturity** fields by default (top-level `level` / `score` / `checks`).

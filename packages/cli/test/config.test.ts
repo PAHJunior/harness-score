@@ -8,6 +8,7 @@ import {
   parseConfigObject,
   parseScopeFlagList,
   resolveScanConfig,
+  resolveSeverities,
 } from '../src/config.js';
 
 describe('parseConfigObject', () => {
@@ -37,7 +38,58 @@ describe('parseConfigObject', () => {
       scopes: { user: true, system: false },
       extraRoots: [{ id: 'team', path: '../shared' }],
       gate: 'effective',
+      extends: [],
+      rules: {},
     });
+  });
+
+  test('accepts a known preset in extends', () => {
+    expect(parseConfigObject({ extends: ['no-hooks'] }, 'test').extends).toEqual(['no-hooks']);
+  });
+
+  test('rejects an unknown preset name', () => {
+    expect(() => parseConfigObject({ extends: ['does-not-exist'] }, 'test')).toThrow(/unknown preset/);
+  });
+
+  test('accepts off/error severities in rules', () => {
+    const parsed = parseConfigObject({ rules: { 'HKS-01': 'off', 'HYG-05': 'error' } }, 'test');
+    expect(parsed.rules).toEqual({ 'HKS-01': 'off', 'HYG-05': 'error' });
+  });
+
+  test('rejects an unknown check ID in rules', () => {
+    expect(() => parseConfigObject({ rules: { 'NOPE-01': 'off' } }, 'test')).toThrow(/unknown check ID/);
+  });
+
+  test('rejects "warn" severity with a clear "not supported yet" message', () => {
+    expect(() => parseConfigObject({ rules: { 'HKS-01': 'warn' } }, 'test')).toThrow(/not supported yet/);
+  });
+
+  test('rejects an invalid severity string', () => {
+    expect(() => parseConfigObject({ rules: { 'HKS-01': 'disabled' } }, 'test')).toThrow(
+      /severity must be "off" or "error"/,
+    );
+  });
+});
+
+describe('resolveSeverities', () => {
+  test('defaults every check to error/default', () => {
+    const resolved = resolveSeverities({ extends: [], rules: {} });
+    expect(resolved.get('HKS-01')).toEqual({ severity: 'error', source: 'default' });
+  });
+
+  test('applies a preset from extends', () => {
+    const resolved = resolveSeverities({ extends: ['no-hooks'], rules: {} });
+    expect(resolved.get('HKS-01')).toEqual({ severity: 'off', source: 'extends:no-hooks' });
+    expect(resolved.get('HKS-05')).toEqual({ severity: 'off', source: 'extends:no-hooks' });
+    // A dimension untouched by the preset stays at the default.
+    expect(resolved.get('HYG-01')).toEqual({ severity: 'error', source: 'default' });
+  });
+
+  test('local rules take precedence over extends', () => {
+    const resolved = resolveSeverities({ extends: ['no-hooks'], rules: { 'HKS-01': 'error' } });
+    expect(resolved.get('HKS-01')).toEqual({ severity: 'error', source: 'rules' });
+    // Everything else the preset touched stays overridden.
+    expect(resolved.get('HKS-02')).toEqual({ severity: 'off', source: 'extends:no-hooks' });
   });
 });
 

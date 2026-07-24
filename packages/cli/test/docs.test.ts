@@ -2,12 +2,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
-import { ALL_CHECKS } from '../src/index.js';
+import { ALL_CHECKS, PRESET_REGISTRY } from '../src/index.js';
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const GUIDE = path.join(REPO, 'docs', 'guide', 'measure-and-improve.md');
 const GUIDE_DIR = path.join(REPO, 'docs', 'guide');
+const METRICS = path.join(REPO, 'docs', 'guide', 'metrics-and-codes.md');
 const LOCALES = ['pt-BR', 'es', 'zh-CN', 'hi-IN'] as const;
 
 function listGuideFiles(dir: string): string[] {
@@ -53,6 +54,17 @@ describe('translated measure-and-improve guides preserve anchors', () => {
       expect(localeAnchors).toEqual(enAnchors);
     });
   }
+});
+
+describe('built-in presets stay in sync with metrics-and-codes.md', () => {
+  const metricsContent = fs.readFileSync(METRICS, 'utf8');
+
+  test('every PRESET_REGISTRY key has a documented anchor', () => {
+    const missing = Object.keys(PRESET_REGISTRY).filter(
+      (name) => !metricsContent.includes(`{#preset-${name}}`),
+    );
+    expect(missing).toEqual([]);
+  });
 });
 
 describe('translated guides mirror English chapter set', () => {

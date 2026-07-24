@@ -81,6 +81,40 @@ scores:
    `score.ts` and both docs pages; `npm test` fails loudly otherwise.
 4. Run the full gate before opening the PR (see below).
 
+## Proposing a preset
+
+`.harness-score.json`'s `extends` key applies named, maintainer-curated
+presets — bundles of per-check severity overrides (see [Team customization](https://paladini.github.io/harness-score/guide/metrics-and-codes#team-customization)
+in the guide). This is deliberately **not** a free-form per-repo opt-out:
+presets go through the same review that protects the check catalog, so a
+badge that says "L3 under preset X" still means something comparable across
+every repo that adopts X.
+
+1. Open an issue (the **Check change** template is close enough — describe
+   which checks the preset would set to `"off"` and why the exclusion is
+   structural, not a preference: a policy constraint, not "we don't feel
+   like it"). Presets that reduce a whole dimension to zero applicable
+   checks are the highest-scrutiny case, since they can cap the maturity
+   ladder (see below).
+2. Add the preset to `PRESET_REGISTRY` in `packages/cli/src/config.ts`.
+   Derive its severity map from `ALL_CHECKS` where possible (filter by
+   dimension or check ID) instead of hardcoding IDs, so it never drifts as
+   the catalog changes.
+3. If the preset excludes every check in a dimension that a `LEVEL_REQUIREMENTS`
+   entry depends on (`dimAtLeast` in `score.ts`), the affected level becomes
+   unreachable under that preset — `computeLevel` reports this as `capped`
+   with a `capReason`, not as a silent pass. That's expected, not a bug to
+   work around: don't add special-casing to let a preset "skip" a ladder
+   requirement it structurally can't satisfy.
+4. Document the preset in `docs/guide/metrics-and-codes.md`'s "Built-in
+   presets" table with a `{#preset-<name>}` anchor matching the preset's
+   key — `packages/cli/test/docs.test.ts` asserts every `PRESET_REGISTRY`
+   key has one. Mirror the section in `docs/pt-BR/guide/metrics-and-codes.md`
+   too.
+5. Add tests: severity resolution in `packages/cli/test/config.test.ts`,
+   and — if the preset can cap a level — a `capped`/`capReason` assertion in
+   `packages/cli/test/score.test.ts` or `scoring-integration.test.ts`.
+
 ## Before opening a PR
 
 ```bash
