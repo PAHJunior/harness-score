@@ -142,7 +142,11 @@ JSON opcional en la raíz del scan (schema estricto — claves desconocidas gene
   "extraRoots": [
     { "id": "team-shared", "path": "../shared-harness" }
   ],
-  "gate": "maturity"
+  "gate": "maturity",
+  "extends": ["no-hooks"],
+  "rules": {
+    "HYG-05": "off"
+  }
 }
 ```
 
@@ -152,8 +156,29 @@ JSON opcional en la raíz del scan (schema estricto — claves desconocidas gene
 | `scopes.system` | boolean | `false` | Incluir overlay a nivel sistema |
 | `extraRoots` | `{ id, path }[]` | `[]` | Árboles extra de harness fusionados en effective |
 | `gate` | `"maturity"` \| `"effective"` | `"maturity"` | Qué puntaje usa `--min-level` |
+| `extends` | `string[]` | `[]` | Presets con nombre a aplicar (ver abajo) |
+| `rules` | `Record<checkId, severity>` | `{}` | Override de severidad por check, aplicado después de cada preset en `extends` |
 
-Precedencia: **flags de CLI → inputs de Action → archivo de config → defaults**.
+Precedencia: **flags de CLI → inputs de Action → archivo de config → defaults**. `extends`/`rules` son exclusivos del archivo de config en esta versión — todavía no hay flag `--extends`/`--rule` en la CLI ni input equivalente en la Action; usa `--config <path>` apuntando a un `.harness-score.json` que los defina.
+
+### Personalización por equipo: `extends` y `rules` {#team-customization}
+
+El vocabulario está tomado directamente de ESLint, porque es un vocabulario que la mayoría de equipos ya conoce:
+
+- **`rules`** sobrescribe la severidad de un check específico por ID: `"HYG-05": "off"`. La severidad es `"off"` o `"error"` en esta versión — `"error"` es el default implícito de todo check, y `"off"` remueve el check **del numerador y del denominador** de la puntuación de su dimensión (se excluye estructuralmente, nunca cuenta como fallo). `"warn"` es un valor reconocido pero rechazado deliberadamente hoy con un error claro de "aún no soportado" — reservado para un modo futuro, consultivo y no bloqueante.
+- **`extends`** aplica un preset con nombre, curado por los maintainers — un paquete versionado y revisado vía PR de overrides de `rules`, no una excepción libre por repositorio. Esto preserva la misma gobernanza que ya protege el catálogo de checks: proponer un preset nuevo pasa por revisión (ver [CONTRIBUTING.md](https://github.com/paladini/harness-score/blob/main/CONTRIBUTING.md#proposing-a-preset)), no es un opt-out local silencioso. Los presets en `extends` se aplican en el orden del array, y cualquier entrada explícita en `rules` siempre prevalece sobre un preset.
+
+Todo check excluido por `extends`/`rules` siempre se divulga — en la salida de terminal (línea `Preset: ...`), en el reporte Markdown (línea `**Preset:**` y estado `➖` en la tabla de checks) y en el campo `preset` del `--json` — nunca escondido silenciosamente detrás de un flag.
+
+Una excepción, a propósito: `HYG-03`, `HYG-04` y `HYG-06` — los checks que detectan credenciales activamente filtradas o expuestas — nunca pueden ponerse en `"off"`, ni vía `rules` ni vía preset. Todo lo demás en este formato de config se apoya en divulgación y revisión de PR para mantener la integridad; estos tres son el único punto que no es negociable.
+
+#### Presets nativos
+
+| Preset | Efecto | Por qué |
+|---|---|---|
+| `no-hooks` {#preset-no-hooks} | Pone `HKS-01`–`HKS-05` (toda la dimensión Hooks & Guardrails, 14 de 108 puntos) en `"off"` | Para entornos donde ejecutar scripts de hook local está prohibido por política — dev containers bloqueados, orgs reguladas, runners compartidos sin permiso de instalar hooks. El guardrail en esos casos se aplica solo vía CI. |
+
+Excluir una dimensión entera tiene una consecuencia honesta que vale la pena saber de antemano: como **L4 · Self-correcting** está *definido* por hooks de guardrail en runtime (ver el [Modelo de madurez](./maturity-model)), un repositorio bajo `no-hooks` nunca alcanza L4 — el nivel queda **capped** (limitado), no "reprobado". `report.level.capped` es `true` y `report.level.capReason` explica el motivo; el resto de dimensiones mantiene su puntuación intacta. Esto es el escáner siendo honesto sobre lo que "self-correcting" significa, no una penalización por excluir hooks.
 
 ## Flags de CLI (configuración del scan)
 
@@ -190,5 +215,9 @@ Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effect
 | `effective` | Misma forma: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | Herramientas vistas en el **repo** (informativo) |
 | `truncated` | El walk alcanzó límite de archivos |
+| `preset` | `{ extends, rules, resolved }` — personalización de equipo efectivamente aplicada; `resolved` solo lista checks cuya severidad difiere del default |
+| `level.capped`, `level.capReason` | `capped` es `true` cuando un requisito bloqueante del siguiente nivel nunca puede cumplirse bajo la config actual (ej.: dimensión excluida por preset); `capReason` explica el motivo |
+| `dimensions[].applicable` | `false` solo cuando todo check de esa dimensión resolvió a `"off"` |
+| `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — la severidad resuelta que este scan usó para ese check |
 
 `--diff` compara campos de **maturity** por defecto (top-level `level` / `score` / `checks`).

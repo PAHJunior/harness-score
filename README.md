@@ -254,6 +254,26 @@ Or in CI:
     min-level: '3'
 ```
 
+## Team customization
+
+Some checks don't apply to every team for structural reasons — a policy
+that forbids local hook scripts, for instance. `.harness-score.json`
+(optional, at the repo root) supports two ESLint-style keys so a team can
+say so without forking the model:
+
+```json
+{
+  "extends": ["no-hooks"],
+  "rules": { "HYG-05": "off" }
+}
+```
+
+Excluded checks are removed from both sides of the score's fraction — never
+penalized, never silently hidden. Every exclusion shows up in the terminal,
+Markdown, and JSON output, and three checks that detect actively leaked
+credentials can never be excluded, from either a rule or a preset. Full
+story: **[Metrics & Codes → Team customization](https://paladini.github.io/harness-score/guide/metrics-and-codes#team-customization)**.
+
 ## A worked improvement plan
 
 Starting from a typical L0 product repo, one focused session per level:

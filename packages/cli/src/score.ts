@@ -1,5 +1,6 @@
 import { ALL_CHECKS } from './checks/index.js';
-import type { ResolvedScanConfig } from './config.js';
+import type { ResolvedScanConfig, ResolvedSeverity } from './config.js';
+import { resolveSeverities } from './config.js';
 import { buildOverlays } from './harness/global-paths.js';
 import { detectHarnesses } from './harness/index.js';
 import { createScanContext } from './scan.js';
@@ -20,7 +21,7 @@ export const TOOL_VERSION = '1.3.3';
 
 export const LEVEL_NAMES = ['Unharnessed', 'Documented', 'Guided', 'Sensing', 'Self-correcting'] as const;
 
-function runChecks(ctx: ScanContext): CheckResult[] {
+function runChecks(ctx: ScanContext, severities: Map<string, ResolvedSeverity>): CheckResult[] {
   return ALL_CHECKS.map((check) => {
     let outcome: CheckOutcome;
     try {
@@ -38,33 +39,45 @@ function runChecks(ctx: ScanContext): CheckResult[] {
       evidence: outcome.evidence,
       remediation: check.remediation,
       docsUrl: `${DOCS_BASE_URL}#${check.id.toLowerCase()}`,
+      severity: severities.get(check.id)?.severity ?? 'error',
     };
   });
 }
 
+/** Checks with severity 'off' are excluded from both the numerator and denominator — structurally removed, never scored as failing. */
 function scoreDimensions(checks: CheckResult[]): DimensionScore[] {
   return DIMENSIONS.map((dim) => {
     const own = checks.filter((c) => c.dimension === dim.id);
-    const earned = own.reduce((sum, c) => sum + c.earned, 0);
-    const max = own.reduce((sum, c) => sum + c.points, 0);
+    const scored = own.filter((c) => c.severity !== 'off');
+    const earned = scored.reduce((sum, c) => sum + c.earned, 0);
+    const max = scored.reduce((sum, c) => sum + c.points, 0);
     return {
       id: dim.id,
       title: dim.title,
       earned,
       max,
       percent: max === 0 ? 0 : Math.round((earned / max) * 100),
+      /** False only when every check originally in this dimension resolved to 'off'. */
+      applicable: scored.length > 0,
     };
   });
 }
 
 interface Requirement {
   label: string;
+  /** Set only by dimAtLeast — lets computeLevel tell "structurally unreachable" apart from "not yet met". */
+  blockedDimension?: DimensionId;
   met(dims: Map<DimensionId, DimensionScore>, totalPercent: number): boolean;
 }
 
 const dimAtLeast = (id: DimensionId, pct: number): Requirement => ({
   label: `${id} ≥ ${pct}%`,
-  met: (dims) => (dims.get(id)?.percent ?? 0) >= pct,
+  blockedDimension: id,
+  met: (dims) => {
+    const dim = dims.get(id);
+    if (!dim?.applicable) return false;
+    return dim.percent >= pct;
+  },
 });
 
 /**
@@ -93,23 +106,38 @@ function computeLevel(dimensions: DimensionScore[], totalPercent: number): Level
   const dims = new Map<DimensionId, DimensionScore>(dimensions.map((d) => [d.id, d]));
   let index = 0;
   let gaps: string[] = [];
+  let capped = false;
+  let capReason: string | undefined;
   for (let level = 0; level < LEVEL_REQUIREMENTS.length; level += 1) {
     const unmet = LEVEL_REQUIREMENTS[level]!.filter((r) => !r.met(dims, totalPercent));
     if (unmet.length === 0) {
       index = level + 1;
     } else {
       gaps = unmet.map((r) => r.label);
+      // At least one unmet requirement can never be satisfied (its dimension has zero
+      // applicable checks under the current config) — the level itself is unreachable,
+      // not just "not yet climbed," even if other unmet requirements are still actionable.
+      const cappedReq = unmet.find(
+        (r) => r.blockedDimension !== undefined && dims.get(r.blockedDimension)?.applicable === false,
+      );
+      if (cappedReq) {
+        capped = true;
+        capReason =
+          `L${level + 1} requires ${cappedReq.label}, which is not reachable: the "${cappedReq.blockedDimension}" ` +
+          'dimension has no applicable checks under the current config.';
+      }
       break;
     }
   }
-  return { index, name: LEVEL_NAMES[index]!, nextLevelGaps: gaps };
+  return { index, name: LEVEL_NAMES[index]!, nextLevelGaps: gaps, capped, capReason };
 }
 
-function buildSnapshot(ctx: ScanContext): ScoreSnapshot {
-  const checks = runChecks(ctx);
+function buildSnapshot(ctx: ScanContext, severities: Map<string, ResolvedSeverity>): ScoreSnapshot {
+  const checks = runChecks(ctx, severities);
   const dimensions = scoreDimensions(checks);
-  const earned = checks.reduce((sum, c) => sum + c.earned, 0);
-  const max = checks.reduce((sum, c) => sum + c.points, 0);
+  const scored = checks.filter((c) => c.severity !== 'off');
+  const earned = scored.reduce((sum, c) => sum + c.earned, 0);
+  const max = scored.reduce((sum, c) => sum + c.points, 0);
   const percent = max === 0 ? 0 : Math.round((earned / max) * 100);
   return {
     level: computeLevel(dimensions, percent),
@@ -135,14 +163,19 @@ export function buildReportFromContext(
   config: ResolvedScanConfig,
   resolvedRoots: Report['resolvedRoots'],
 ): Report {
-  const maturity = buildSnapshot(maturityCtx);
+  const severities = resolveSeverities(config);
+  const maturity = buildSnapshot(maturityCtx, severities);
   let effective = maturity;
   if (effectiveCtx !== maturityCtx) {
-    const effSnapshot = buildSnapshot(effectiveCtx);
+    const effSnapshot = buildSnapshot(effectiveCtx, severities);
     if (!snapshotsEqual(maturity, effSnapshot)) {
       effective = effSnapshot;
     }
   }
+
+  const resolvedEntries = [...severities.entries()]
+    .filter(([, v]) => v.source !== 'default')
+    .map(([id, v]) => ({ id, severity: v.severity, source: v.source }));
 
   return {
     tool: { name: 'harness-score', version: TOOL_VERSION },
@@ -157,6 +190,7 @@ export function buildReportFromContext(
     dimensions: maturity.dimensions,
     checks: maturity.checks,
     effective,
+    preset: { extends: config.extends, rules: config.rules, resolved: resolvedEntries },
   };
 }
 
@@ -168,6 +202,8 @@ export function buildReport(rootInput: string, config?: ResolvedScanConfig): Rep
     extraRoots: [],
     gate: 'maturity' as const,
     effectiveScopes: ['repo'] as const,
+    extends: [],
+    rules: {},
   };
 
   const maturityCtx = createScanContext(root);
@@ -189,6 +225,8 @@ export function buildReportFromScanContext(ctx: ScanContext): Report {
     extraRoots: [],
     gate: 'maturity',
     effectiveScopes: ['repo'],
+    extends: [],
+    rules: {},
   };
   return buildReportFromContext(ctx, ctx, defaultConfig, undefined);
 }

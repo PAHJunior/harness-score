@@ -32,7 +32,16 @@ export interface ReportDiff {
    * reflect a maturity model change rather than an actual change in the repository.
    */
   maturityModelChanged: boolean;
+  /**
+   * True when the team customization (`.harness-score.json`'s `extends`/`rules`) actually
+   * applied differs between baseline and current — dimension/score deltas may then reflect
+   * a config change rather than an actual change in the repository.
+   */
+  presetChanged: boolean;
 }
+
+/** Baselines saved by pre-v1.5 tool versions have no `preset` field at all. */
+const EMPTY_PRESET: Report['preset'] = { extends: [], rules: {}, resolved: [] };
 
 /**
  * Compares two reports from the same maturity model version. Checks present in
@@ -84,5 +93,7 @@ export function computeDiff(baseline: Report, current: Report): ReportDiff {
     checksChanged,
     maturityModelChanged:
       baseline.tool.version !== current.tool.version || baseline.score.max !== current.score.max,
+    presetChanged:
+      JSON.stringify(baseline.preset ?? EMPTY_PRESET) !== JSON.stringify(current.preset ?? EMPTY_PRESET),
   };
 }

@@ -16,6 +16,12 @@ function renderDiffSection(diff: ReportDiff): string[] {
     );
     lines.push('');
   }
+  if (diff.presetChanged) {
+    lines.push(
+      '> ⚠ Baseline used a different extends/rules config — some deltas below may reflect that, not repository changes.',
+    );
+    lines.push('');
+  }
   lines.push(
     `**Level:** L${diff.level.before} · ${diff.level.beforeName} → ` +
       `L${diff.level.after} · ${diff.level.afterName} (${signed(diff.level.delta)})`,
@@ -72,6 +78,12 @@ export function renderMarkdown(report: Report, diff?: ReportDiff | null): string
   if (detected.length > 0) {
     lines.push(`**Detected harnesses:** ${detected.map(toolDisplayName).join(', ')}`);
   }
+  if (report.preset.resolved.length > 0) {
+    const extendsLabel = report.preset.extends.length > 0 ? report.preset.extends.join(', ') : 'local rules';
+    const offIds = report.preset.resolved.filter((r) => r.severity === 'off').map((r) => r.id);
+    const offText = offIds.length > 0 ? ` — ${offIds.join(', ')} → off` : '';
+    lines.push(`**Preset:** ${extendsLabel}${offText}`);
+  }
   lines.push('');
   if (diff) {
     lines.push(...renderDiffSection(diff));
@@ -81,7 +93,10 @@ export function renderMarkdown(report: Report, diff?: ReportDiff | null): string
   lines.push('| Dimension | Score | % |');
   lines.push('|---|---|---|');
   for (const dimension of report.dimensions) {
-    lines.push(`| ${dimension.title} | ${dimension.earned}/${dimension.max} | ${dimension.percent}% |`);
+    const cell = dimension.applicable
+      ? `${dimension.earned}/${dimension.max} | ${dimension.percent}%`
+      : '— | N/A (excluded by preset)';
+    lines.push(`| ${dimension.title} | ${cell} |`);
   }
   lines.push('');
   lines.push('## Checks');
@@ -89,12 +104,12 @@ export function renderMarkdown(report: Report, diff?: ReportDiff | null): string
   lines.push('| | Check | Points | Evidence |');
   lines.push('|---|---|---|---|');
   for (const check of report.checks) {
-    const status = check.passed ? '✅' : '❌';
+    const status = check.severity === 'off' ? '➖' : check.passed ? '✅' : '❌';
     lines.push(
       `| ${status} | [${check.id}](${check.docsUrl}) ${check.title} | ${check.earned}/${check.points} | ${check.evidence.replace(/\|/g, '\\|')} |`,
     );
   }
-  const failed = report.checks.filter((c) => !c.passed);
+  const failed = report.checks.filter((c) => !c.passed && c.severity !== 'off');
   if (failed.length > 0) {
     lines.push('');
     lines.push('## Recommended improvements');
@@ -106,6 +121,10 @@ export function renderMarkdown(report: Report, diff?: ReportDiff | null): string
   if (report.level.nextLevelGaps.length > 0) {
     lines.push('');
     lines.push(`**To reach L${report.level.index + 1}:** ${report.level.nextLevelGaps.join('; ')}`);
+    if (report.level.capped && report.level.capReason) {
+      lines.push('');
+      lines.push(`> ⚠ **Capped:** ${report.level.capReason}`);
+    }
   }
   lines.push('');
   return lines.join('\n');

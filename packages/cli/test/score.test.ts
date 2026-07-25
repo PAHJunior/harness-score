@@ -4,13 +4,18 @@ import type { DimensionId, DimensionScore } from '../src/types.js';
 import { DIMENSIONS } from '../src/types.js';
 import { fakeContext } from './helpers.js';
 
+/** A dimension override is either a bare percent (applicable defaults true) or a full shape. */
+type DimOverride = number | { percent?: number; applicable?: boolean };
+
 /** Synthetic dimension map for exercising LEVEL_REQUIREMENTS in isolation, without a full scan. */
-function makeDims(overrides: Partial<Record<DimensionId, number>>): Map<DimensionId, DimensionScore> {
+function makeDims(overrides: Partial<Record<DimensionId, DimOverride>>): Map<DimensionId, DimensionScore> {
   return new Map(
-    DIMENSIONS.map((d) => [
-      d.id,
-      { id: d.id, title: d.title, earned: 0, max: 100, percent: overrides[d.id] ?? 0 },
-    ]),
+    DIMENSIONS.map((d) => {
+      const raw = overrides[d.id];
+      const percent = typeof raw === 'number' ? raw : (raw?.percent ?? 0);
+      const applicable = typeof raw === 'number' ? true : (raw?.applicable ?? true);
+      return [d.id, { id: d.id, title: d.title, earned: 0, max: 100, percent, applicable }];
+    }),
   );
 }
 
@@ -42,6 +47,24 @@ describe('LEVEL_REQUIREMENTS boundaries', () => {
     expect(totalReq.met(makeDims({}), 79)).toBe(false);
     expect(totalReq.met(makeDims({}), 80)).toBe(true);
     expect(totalReq.met(makeDims({}), 81)).toBe(true);
+  });
+
+  test('dimAtLeast requirements carry blockedDimension for capped-level detection', () => {
+    const contextReq = LEVEL_REQUIREMENTS[0]![0]!;
+    const hooksReq = LEVEL_REQUIREMENTS[3]![0]!;
+    expect(contextReq.blockedDimension).toBe('context');
+    expect(hooksReq.blockedDimension).toBe('hooks');
+    // The L2 OR-requirement and the L4 total-percent requirement aren't tied to a single
+    // hard-blocking dimension, so they must never be treated as "capped-capable".
+    expect(LEVEL_REQUIREMENTS[1]![1]!.blockedDimension).toBeUndefined();
+    expect(LEVEL_REQUIREMENTS[3]![1]!.blockedDimension).toBeUndefined();
+  });
+
+  test('a non-applicable dimension can never satisfy dimAtLeast, even at 100%', () => {
+    const hooksReq = LEVEL_REQUIREMENTS[3]![0]!;
+    expect(hooksReq.met(makeDims({ hooks: { percent: 100, applicable: false } }), 0)).toBe(false);
+    // Contrast: the exact same 100% is satisfied when the dimension is applicable.
+    expect(hooksReq.met(makeDims({ hooks: { percent: 100, applicable: true } }), 0)).toBe(true);
   });
 });
 

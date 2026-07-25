@@ -1,9 +1,10 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
+import type { ResolvedScanConfig } from '../src/config.js';
 import { score } from '../src/index.js';
 import { renderBadge } from '../src/report/badge.js';
-import { buildReportFromScanContext } from '../src/score.js';
+import { buildReport, buildReportFromScanContext } from '../src/score.js';
 import { fakeContext } from './helpers.js';
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'fixtures');
@@ -40,5 +41,53 @@ describe('badge pipeline integrates with score() across all fixture levels', () 
   ])('%s → renderBadge(score(...)) embeds L%i', (fixture, expected) => {
     const svg = renderBadge(score(path.join(FIXTURES, fixture)));
     expect(svg).toContain(`>L${expected}<`);
+  });
+});
+
+describe('no-hooks preset against fixtures/level-4', () => {
+  test('excludes hooks without penalizing other dimensions, and caps the level honestly', () => {
+    const root = path.join(FIXTURES, 'level-4');
+    const baseline = buildReport(root);
+
+    // Sanity-check the fixture still means what the rest of the suite assumes.
+    expect(baseline.level.index).toBe(4);
+    expect(baseline.level.capped).toBe(false);
+
+    const presetConfig: ResolvedScanConfig = {
+      scopes: { user: false, system: false },
+      extraRoots: [],
+      gate: 'maturity',
+      effectiveScopes: ['repo'],
+      extends: ['no-hooks'],
+      rules: {},
+    };
+    const withPreset = buildReport(root, presetConfig);
+
+    const hooksDim = withPreset.dimensions.find((d) => d.id === 'hooks')!;
+    expect(hooksDim.applicable).toBe(false);
+    expect(hooksDim.earned).toBe(0);
+    expect(hooksDim.max).toBe(0);
+
+    // Every other dimension is untouched — excluding hooks never bleeds into the rest.
+    for (const id of ['context', 'skills', 'sensors', 'ci', 'hygiene'] as const) {
+      const before = baseline.dimensions.find((d) => d.id === id)!;
+      const after = withPreset.dimensions.find((d) => d.id === id)!;
+      expect(after.earned).toBe(before.earned);
+      expect(after.max).toBe(before.max);
+    }
+
+    expect(withPreset.score.max).toBe(baseline.score.max - 14);
+
+    // The strongest proof of the mechanism: even if the reduced-pool percent clears 80%,
+    // L4 stays capped — hooks is definitional to "self-correcting", not just another gap.
+    expect(withPreset.level.index).toBeLessThanOrEqual(3);
+    expect(withPreset.level.capped).toBe(true);
+    expect(withPreset.level.capReason).toMatch(/hooks/);
+
+    expect(withPreset.preset.extends).toEqual(['no-hooks']);
+    expect(withPreset.preset.resolved).toHaveLength(5); // HKS-01..05
+    expect(
+      withPreset.preset.resolved.every((r) => r.severity === 'off' && r.source === 'extends:no-hooks'),
+    ).toBe(true);
   });
 });

@@ -40,4 +40,22 @@ describe('computeDiff', () => {
     const baseline = { ...current, score: { ...current.score, max: current.score.max - 8 } };
     expect(computeDiff(baseline, current).maturityModelChanged).toBe(true);
   });
+
+  test('flags presetChanged when the applied extends/rules differ', () => {
+    const current = score(path.join(FIXTURES, 'level-4'));
+    const baseline = { ...current, preset: { extends: ['no-hooks'], rules: {}, resolved: [] } };
+    expect(computeDiff(baseline, current).presetChanged).toBe(true);
+  });
+
+  test('presetChanged is false when both sides carry the same preset', () => {
+    const current = score(path.join(FIXTURES, 'level-4'));
+    expect(computeDiff(current, current).presetChanged).toBe(false);
+  });
+
+  test('a baseline with no preset field at all (pre-v1.5 JSON) does not throw', () => {
+    const current = score(path.join(FIXTURES, 'level-4'));
+    const { preset: _omit, ...legacyBaseline } = current;
+    expect(() => computeDiff(legacyBaseline as typeof current, current)).not.toThrow();
+    expect(computeDiff(legacyBaseline as typeof current, current).presetChanged).toBe(false);
+  });
 });

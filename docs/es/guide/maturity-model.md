@@ -93,6 +93,28 @@ dentro de la sesión. Guías, sensores y guardrails cubren las seis dimensiones.
 Un error ahora debe pasar rules, hooks on-edit, tests, type checker, CI *y*
 gates — en gran parte sin humano en el loop.
 
+## Cuándo un nivel queda "capped" (limitado)
+
+Los requisitos de un nivel asumen que todas las dimensiones están en juego.
+Un equipo puede excluir checks específicos — o una dimensión entera — vía
+`extends`/`rules` de `.harness-score.json` (ver
+[Métricas y códigos](./metrics-and-codes#team-customization)), por una razón
+estructural que exige una política, no una preferencia.
+
+Si esa exclusión vacía una dimensión de la que depende un nivel, el escáner
+reporta el nivel como **capped** en vez de fingir que es solo otro gap por
+cerrar. L4 es el ejemplo más claro: está *definido* por la dimensión Hooks &
+Guardrails, así que un repositorio bajo el preset `no-hooks` puede subir
+todas las demás dimensiones libremente, pero L4 se queda capped — no "0%,
+sigue intentando", sino "no alcanzable bajo tu configuración actual, y aquí
+está exactamente por qué". La puntuación de todas las demás dimensiones
+queda completamente intacta.
+
+Esto es el modelo manteniéndose honesto, no una penalización: "necesaria, no
+suficiente" (abajo) ya significa que una puntuación alta no es garantía — un
+nivel capped es la misma idea aplicada a la elección deliberada y divulgada
+de un equipo sobre qué le aplica.
+
 ## Leyendo una puntuación
 
 Dos repos pueden tener 65% con formas muy distintas — por eso los niveles exigen

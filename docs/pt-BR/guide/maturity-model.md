@@ -93,6 +93,28 @@ da sessão. Guias, sensores e guardrails cobrem as seis dimensões. Um erro agor
 precisa passar pelas rules, hooks on-edit, testes, type checker, CI *e* gates —
 em grande parte sem humano no loop.
 
+## Quando um nível fica "capped" (limitado)
+
+Os requisitos de um nível assumem que todas as dimensões estão em jogo. Uma
+equipe pode excluir checks específicos — ou uma dimensão inteira — via
+`extends`/`rules` do `.harness-score.json` (veja
+[Métricas e códigos](./metrics-and-codes#team-customization)), por um motivo
+estrutural exigido por política, não por preferência.
+
+Se essa exclusão esvazia uma dimensão da qual um nível depende, o scanner
+reporta o nível como **capped** em vez de fingir que é só mais uma lacuna a
+fechar. L4 é o exemplo mais claro: ele é *definido* pela dimensão Hooks &
+Guardrails, então um repositório sob o preset `no-hooks` pode subir todas as
+outras dimensões livremente, mas L4 continua capped — não "0%, continue
+tentando", e sim "inalcançável na configuração atual, e aqui está exatamente
+o porquê". A pontuação de todas as outras dimensões continua completamente
+intacta.
+
+Isso é o modelo se mantendo honesto, não uma penalidade: "necessário, não
+suficiente" (abaixo) já significa que uma pontuação alta não é garantia — um
+nível capped é a mesma ideia aplicada à escolha deliberada e divulgada de
+uma equipe sobre o que se aplica a ela.
+
 ## Lendo uma pontuação
 
 Dois repositórios podem ter 65% com formas muito diferentes — por isso os

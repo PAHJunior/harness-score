@@ -56,6 +56,14 @@ Feedback loop मौजूद। Tests एजेंट चला सके, lint
 
 Loop runtime पर बंद। Gate hooks destructive actions impossible बनाते हैं, discouraged नहीं; feedback hooks हर edit पर lint और format, session के अंदर। Guides, sensors, guardrails सभी छह dimensions cover। गलती अब rules, on-edit hooks, tests, type checker, CI, *और* gates — ज़्यादातर बिना human — पार करनी होगी।
 
+## Level कब capped (सीमित) होता है
+
+किसी level की requirements मानती हैं कि सभी dimensions score में शामिल हैं। कोई team `.harness-score.json` के `extends`/`rules` से specific checks — या पूरी dimension — exclude कर सकती है ([Metrics & Codes](./metrics-and-codes#team-customization) देखें), किसी policy की मांग वाले structural कारण से, preference से नहीं।
+
+अगर वह exclusion किसी ऐसी dimension को खाली कर देता है जिस पर कोई level निर्भर करता है, तो scanner उस level को **capped** report करता है — यह दिखावा करने के बजाय कि यह बस एक और बंद करने लायक gap है। L4 सबसे स्पष्ट उदाहरण: यह Hooks & Guardrails dimension से *defined* है, इसलिए `no-hooks` preset वाली repository बाकी सभी dimensions स्वतंत्र रूप से चढ़ सकती है, पर L4 capped ही रहता है — "0%, कोशिश जारी रखें" नहीं, बल्कि "आपकी वर्तमान configuration में अप्राप्य, और यहाँ बताई गई है वजह"। बाकी हर dimension का score पूरी तरह अप्रभावित रहता है।
+
+यह model का ईमानदार बने रहना है, कोई सज़ा नहीं: नीचे दिया "आवश्यक, पर्याप्त नहीं" पहले से ही मतलब रखता है कि high score कोई गारंटी नहीं — capped level वही विचार है, बस team की अपनी जानबूझकर की गई और publicly disclosed choice पर लागू।
+
 ## Score पढ़ना
 
 दो repositories 65% score कर सकते हैं, संरचना बिल्कुल अलग — इसलिए levels dimensions पर gate:

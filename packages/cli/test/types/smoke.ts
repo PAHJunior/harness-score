@@ -23,12 +23,15 @@ import {
   LEVEL_NAMES,
   LEVEL_REQUIREMENTS,
   type LevelInfo,
+  PRESET_REGISTRY,
   type Report,
   type ReportDiff,
   renderBadge,
   renderMarkdown,
   renderTerminal,
+  resolveSeverities,
   type ScanContext,
+  type Severity,
   score,
   TOOL_DISPLAY_NAMES,
   TOOL_VERSION,
@@ -55,6 +58,9 @@ const checkDelta: CheckDelta | undefined = diff.checksChanged[0];
 const dimensionDelta: DimensionDelta = diff.dimensions[0]!;
 const toolId: ToolId = 'cursor';
 const toolName: string = toolDisplayName(scored.detectedHarnesses[0] ?? 'cursor');
+const severity: Severity = scored.checks[0]!.severity;
+const severities = resolveSeverities({ extends: [], rules: {} });
+const presets = PRESET_REGISTRY;
 
 // Referenced only so the compiler treats every import as used; this file is
 // never executed, only type-checked.
@@ -77,6 +83,9 @@ void [
   dimensionDelta,
   toolId,
   toolName,
+  severity,
+  severities,
+  presets,
   DOCS_BASE_URL,
   LEVEL_NAMES,
   LEVEL_REQUIREMENTS,

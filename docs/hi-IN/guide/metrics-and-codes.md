@@ -142,7 +142,11 @@ Scan root पर optional JSON (strict schema — unknown keys error):
   "extraRoots": [
     { "id": "team-shared", "path": "../shared-harness" }
   ],
-  "gate": "maturity"
+  "gate": "maturity",
+  "extends": ["no-hooks"],
+  "rules": {
+    "HYG-05": "off"
+  }
 }
 ```
 
@@ -152,8 +156,29 @@ Scan root पर optional JSON (strict schema — unknown keys error):
 | `scopes.system` | boolean | `false` | System-level overlay include करें |
 | `extraRoots` | `{ id, path }[]` | `[]` | Effective में merge होने वाली extra harness trees |
 | `gate` | `"maturity"` \| `"effective"` | `"maturity"` | `--min-level` कौन-सा score use करता है |
+| `extends` | `string[]` | `[]` | Apply करने के लिए named presets (नीचे देखें) |
+| `rules` | `Record<checkId, severity>` | `{}` | Per-check severity override, `extends` के हर preset के बाद apply होता है |
 
-Precedence: **CLI flags → Action inputs → config file → defaults**।
+Precedence: **CLI flags → Action inputs → config file → defaults**। `extends`/`rules` इस release में सिर्फ config-file तक सीमित हैं — अभी कोई `--extends`/`--rule` CLI flag या equivalent Action input नहीं है; इन्हें set करने वाली `.harness-score.json` की ओर point करने के लिए `--config <path>` use करें।
+
+### Team customization: `extends` और `rules` {#team-customization}
+
+यह vocabulary सीधे ESLint से लिया गया है, क्योंकि ज़्यादातर teams इसे पहले से जानती हैं:
+
+- **`rules`** किसी single check की severity को ID से override करता है: `"HYG-05": "off"`। इस release में severity `"off"` या `"error"` — `"error"` हर check का implicit default, और `"off"` check को उसकी dimension के score के **numerator और denominator दोनों** से हटा देता है (structurally excluded, कभी fail नहीं गिना जाता)। `"warn"` एक recognized पर आज जानबूझकर rejected value है, साफ़ "not supported yet" error के साथ — future advisory, non-blocking mode के लिए reserved।
+- **`extends`** maintainers द्वारा curate किया named preset apply करता है — `rules` overrides का versioned, PR-reviewed bundle, free-form per-repo exception नहीं। यह वही governance बनाए रखता है जो checks catalog को पहले से protect करती है: नया preset propose करना review से गुज़रता है ([CONTRIBUTING.md](https://github.com/paladini/harness-score/blob/main/CONTRIBUTING.md#proposing-a-preset) देखें), silent local opt-out नहीं। `extends` में presets array क्रम में apply होते हैं, और `rules` की कोई explicit entry हमेशा preset पर prevail करती है।
+
+`extends`/`rules` द्वारा excluded हर check हमेशा disclose होता है — terminal output में (`Preset: ...` line), Markdown report में (`**Preset:**` line और checks table में `➖` status), और `--json` के `preset` field में — कभी किसी flag के पीछे silently छुपा नहीं।
+
+एक अपवाद, जानबूझकर: `HYG-03`, `HYG-04`, और `HYG-06` — वे checks जो actively leaked या exposed credentials detect करते हैं — इन्हें `rules` या preset, किसी से भी कभी `"off"` set नहीं किया जा सकता। इस config format में बाकी सब कुछ disclosure और PR review पर integrity के लिए निर्भर है; ये तीन ही एकमात्र non-negotiable बिंदु हैं।
+
+#### Built-in presets
+
+| Preset | प्रभाव | क्यों |
+|---|---|---|
+| `no-hooks` {#preset-no-hooks} | `HKS-01`–`HKS-05` (पूरी Hooks & Guardrails dimension, 108 में से 14 points) को `"off"` set करता है | उन environments के लिए जहाँ local hook script execution policy से disallowed है — locked-down dev containers, regulated orgs, hooks install करने की permission-रहित shared runners। इन cases में guardrail केवल CI में लागू होता है। |
+
+पूरी dimension exclude करने का एक ईमानदार परिणाम है, जो पहले से जानना उपयोगी: चूंकि **L4 · Self-correcting** runtime guardrail hooks से *defined* है (देखें [Maturity Model](./maturity-model)), `no-hooks` preset वाली repository कभी L4 तक नहीं पहुँचती — level **capped** बन जाता है, "fail" नहीं। `report.level.capped` `true` होता है और `report.level.capReason` वजह बताता है; बाकी हर dimension का score पूरी तरह अप्रभावित रहता है। यह scanner का "self-correcting" के अर्थ पर ईमानदार बने रहना है, hooks exclude करने की सज़ा नहीं।
 
 ## CLI flags (स्कैन कॉन्फ़िगरेशन)
 
@@ -190,5 +215,9 @@ Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effect
 | `effective` | Same shape: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | **Repo** में देखे गए tools (informational) |
 | `truncated` | Walk file cap hit |
+| `preset` | `{ extends, rules, resolved }` — इस scan में actually apply हुई team customization; `resolved` सिर्फ वे checks list करता है जिनकी severity default से अलग है |
+| `level.capped`, `level.capReason` | जब अगले level की कोई blocking requirement वर्तमान config में कभी पूरी नहीं हो सकती (जैसे उसकी dimension preset से excluded), तो `capped` `true` होता है; `capReason` वजह बताता है |
+| `dimensions[].applicable` | `false` सिर्फ तब जब उस dimension का हर check `"off"` resolve हुआ हो |
+| `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — इस scan ने उस check के लिए जो resolved severity use की |
 
 `--diff` default में **maturity** fields compare करता है (top-level `level` / `score` / `checks`)।

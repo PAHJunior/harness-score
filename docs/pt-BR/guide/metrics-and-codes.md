@@ -142,7 +142,11 @@ JSON opcional na raiz do scan (schema estrito — chaves desconhecidas geram err
   "extraRoots": [
     { "id": "team-shared", "path": "../shared-harness" }
   ],
-  "gate": "maturity"
+  "gate": "maturity",
+  "extends": ["no-hooks"],
+  "rules": {
+    "HYG-05": "off"
+  }
 }
 ```
 
@@ -152,8 +156,29 @@ JSON opcional na raiz do scan (schema estrito — chaves desconhecidas geram err
 | `scopes.system` | boolean | `false` | Incluir overlay em nível de sistema |
 | `extraRoots` | `{ id, path }[]` | `[]` | Árvores extras de harness mescladas no effective |
 | `gate` | `"maturity"` \| `"effective"` | `"maturity"` | Qual pontuação o `--min-level` usa |
+| `extends` | `string[]` | `[]` | Presets nomeados a aplicar (veja abaixo) |
+| `rules` | `Record<checkId, severity>` | `{}` | Override de severidade por check, aplicado depois de cada preset em `extends` |
 
-Precedência: **flags da CLI → inputs da Action → arquivo de config → padrões**.
+Precedência: **flags da CLI → inputs da Action → arquivo de config → padrões**. `extends`/`rules` são exclusivos do arquivo de config nesta versão — ainda não existe flag `--extends`/`--rule` na CLI nem input equivalente na Action; use `--config <path>` apontando para um `.harness-score.json` que os defina.
+
+### Personalização por equipe: `extends` e `rules` {#team-customization}
+
+O vocabulário é emprestado diretamente do ESLint, porque é um vocabulário que a maioria das equipes já conhece:
+
+- **`rules`** sobrescreve a severidade de um check específico por ID: `"HYG-05": "off"`. A severidade é `"off"` ou `"error"` nesta versão — `"error"` é o padrão implícito de todo check, e `"off"` remove o check **do numerador e do denominador** da pontuação da sua dimensão (é excluído estruturalmente, nunca contado como falha). `"warn"` é um valor reconhecido mas deliberadamente rejeitado hoje com um erro claro de "ainda não suportado" — reservado para um modo futuro, consultivo e não-bloqueante.
+- **`extends`** aplica um preset nomeado e curado pelos mantenedores — um pacote versionado e revisado via PR de overrides de `rules`, não uma isenção livre por repositório. Isso preserva a mesma governança que já protege o catálogo de checks: propor um preset novo passa por revisão (veja [CONTRIBUTING.md](https://github.com/paladini/harness-score/blob/main/CONTRIBUTING.md#proposing-a-preset)), não é um opt-out local silencioso. Presets em `extends` são aplicados na ordem do array, e qualquer entrada explícita em `rules` sempre prevalece sobre um preset.
+
+Todo check excluído por `extends`/`rules` é sempre divulgado — na saída do terminal (linha `Preset: ...`), no relatório Markdown (linha `**Preset:**` e status `➖` na tabela de checks) e no campo `preset` do `--json` — nunca escondido silenciosamente atrás de uma flag.
+
+Uma exceção, proposital: `HYG-03`, `HYG-04` e `HYG-06` — os checks que detectam credenciais efetivamente vazadas ou expostas — nunca podem ser definidos como `"off"`, nem via `rules` nem via preset. Todo o resto nesse formato de config se apoia em divulgação e revisão de PR pra manter a integridade; esses três são o único ponto que não é negociável.
+
+#### Presets nativos
+
+| Preset | Efeito | Por quê |
+|---|---|---|
+| `no-hooks` {#preset-no-hooks} | Define `HKS-01`–`HKS-05` (toda a dimensão Hooks & Guardrails, 14 dos 108 pontos) como `"off"` | Para ambientes onde a execução de scripts de hook local é vedada por política — dev containers travados, orgs reguladas, runners compartilhados sem permissão de instalar hooks. O guardrail nesses casos é aplicado só via CI. |
+
+Excluir uma dimensão inteira tem uma consequência honesta que vale saber de antemão: como **L4 · Self-correcting** é *definido* por hooks de guardrail em runtime (veja o [Modelo de Maturidade](./maturity-model)), um repositório sob `no-hooks` nunca alcança L4 — o nível fica **capped** (limitado), não "reprovado". `report.level.capped` é `true` e `report.level.capReason` explica o motivo; toda outra dimensão continua com a pontuação intacta. Isso é o scanner sendo honesto sobre o que "self-correcting" significa, não uma penalidade por excluir hooks.
 
 ## Flags da CLI (configuração do scan)
 
@@ -190,5 +215,9 @@ Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effect
 | `effective` | Mesma forma: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | Ferramentas vistas no **repo** (informativo) |
 | `truncated` | Walk atingiu limite de arquivos |
+| `preset` | `{ extends, rules, resolved }` — personalização de equipe efetivamente aplicada; `resolved` só lista checks cuja severidade difere do padrão |
+| `level.capped`, `level.capReason` | `capped` é `true` quando um requisito bloqueante do próximo nível nunca pode ser satisfeito sob a config atual (ex.: dimensão excluída por preset); `capReason` explica o motivo |
+| `dimensions[].applicable` | `false` só quando todo check daquela dimensão resolveu para `"off"` |
+| `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — a severidade resolvida usada por este scan para aquele check |
 
 `--diff` compara campos de **maturity** por padrão (top-level `level` / `score` / `checks`).

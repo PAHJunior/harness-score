@@ -57,6 +57,8 @@ export interface CheckResult {
   evidence: string;
   remediation: string;
   docsUrl: string;
+  /** Resolved severity ('off' checks are excluded from scoring but still listed here). */
+  severity: Severity;
 }
 
 export interface DimensionScore {
@@ -66,6 +68,8 @@ export interface DimensionScore {
   max: number;
   /** 0–100, rounded. */
   percent: number;
+  /** False only when every check in this dimension resolved to 'off' (excluded by config). */
+  applicable: boolean;
 }
 
 export interface LevelInfo {
@@ -74,6 +78,10 @@ export interface LevelInfo {
   name: string;
   /** What is missing to reach the next level; empty at L4. */
   nextLevelGaps: string[];
+  /** True when at least one blocking requirement for the next level can never be met under the current config (e.g. its dimension was excluded by a preset). */
+  capped: boolean;
+  /** Human-readable explanation of why the level is capped; set only when `capped` is true. */
+  capReason?: string;
 }
 
 /** One scored snapshot (maturity or effective). */
@@ -85,7 +93,17 @@ export interface ScoreSnapshot {
   detectedHarnesses: string[];
 }
 
-import type { GateMode } from './config.js';
+import type { GateMode, Severity } from './config.js';
+
+/** Local team customization actually applied to this scan, always present and never hidden behind a flag. */
+export interface PresetInfo {
+  /** Preset names from `.harness-score.json`'s `extends`, in application order. */
+  extends: string[];
+  /** Raw per-check severity overrides from `.harness-score.json`'s `rules`. */
+  rules: Record<string, Severity>;
+  /** Every check whose resolved severity differs from the 'default' error baseline, with why. */
+  resolved: Array<{ id: string; severity: Severity; source: string }>;
+}
 
 export interface Report {
   tool: { name: string; version: string };
@@ -107,4 +125,6 @@ export interface Report {
   checks: CheckResult[];
   /** Repo ∪ configured global/extra scopes — what the agent likely sees on this machine. */
   effective: ScoreSnapshot;
+  /** Team customization (extends/rules) actually applied to this scan. */
+  preset: PresetInfo;
 }

@@ -40,6 +40,13 @@ function renderDiffSection(diff: ReportDiff): string[] {
       ),
     );
   }
+  if (diff.presetChanged) {
+    lines.push(
+      yellow(
+        `  ${WARN} Baseline used a different extends/rules config ${MIDDOT} some deltas below may reflect that, not repository changes.`,
+      ),
+    );
+  }
   lines.push(
     `    Level: L${diff.level.before} ${MIDDOT} ${diff.level.beforeName} ${ARROW} ` +
       `L${diff.level.after} ${MIDDOT} ${diff.level.afterName} (${signed(diff.level.delta)})`,
@@ -93,8 +100,9 @@ export function renderTerminal(report: Report, diff?: ReportDiff | null): string
     );
     lines.push('');
   }
+  const cappedMarker = report.level.capped ? ` ${yellow('(capped)')}` : '';
   lines.push(
-    `  ${bold('Maturity:')} ${levelPaint(bold(`L${report.level.index} ${MIDDOT} ${report.level.name}`))}` +
+    `  ${bold('Maturity:')} ${levelPaint(bold(`L${report.level.index} ${MIDDOT} ${report.level.name}`))}${cappedMarker}` +
       `   ${bold('Score:')} ${report.score.earned}/${report.score.max} (${report.score.percent}%)` +
       dim(`   scopes: ${formatScopes(report.scopes.maturity)}`),
   );
@@ -113,11 +121,21 @@ export function renderTerminal(report: Report, diff?: ReportDiff | null): string
   if (detected.length > 0) {
     lines.push(dim(`  Detected: ${detected.map(toolDisplayName).join(', ')}`));
   }
+  if (report.preset.resolved.length > 0) {
+    const extendsLabel = report.preset.extends.length > 0 ? report.preset.extends.join(', ') : 'local rules';
+    const offIds = report.preset.resolved.filter((r) => r.severity === 'off').map((r) => r.id);
+    const offText = offIds.length > 0 ? ` ${MIDDOT} ${offIds.join(', ')} ${ARROW} off` : '';
+    lines.push(dim(`  Preset: ${extendsLabel}${offText}`));
+  }
   lines.push('');
   if (diff) {
     lines.push(...renderDiffSection(diff));
   }
   for (const dimension of report.dimensions) {
+    if (!dimension.applicable) {
+      lines.push(`  ${dimension.title.padEnd(20)} ${dim('excluded by preset')}`);
+      continue;
+    }
     const pct = `${dimension.percent}%`.padStart(4);
     lines.push(
       `  ${dimension.title.padEnd(20)} ${bar(dimension.percent)} ${pct}  ${dim(`${dimension.earned}/${dimension.max} pts`)}`,
@@ -125,7 +143,7 @@ export function renderTerminal(report: Report, diff?: ReportDiff | null): string
   }
   lines.push('');
 
-  const failed = report.checks.filter((c) => !c.passed);
+  const failed = report.checks.filter((c) => !c.passed && c.severity !== 'off');
   if (failed.length === 0) {
     lines.push(green(`  All checks passed ${MIDDOT} this repository is fully harnessed.`));
   } else {
@@ -140,6 +158,9 @@ export function renderTerminal(report: Report, diff?: ReportDiff | null): string
   lines.push('');
   if (report.level.nextLevelGaps.length > 0) {
     lines.push(`  ${bold(`To reach L${report.level.index + 1}:`)} ${report.level.nextLevelGaps.join('; ')}`);
+    if (report.level.capped && report.level.capReason) {
+      lines.push(yellow(`  ${WARN} ${report.level.capReason}`));
+    }
     lines.push('');
   }
   return lines.join('\n');

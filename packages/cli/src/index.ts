@@ -5,9 +5,11 @@ export {
   DEFAULT_CONFIG,
   discoverConfig,
   loadConfigFile,
+  PRESET_REGISTRY,
   parseConfigObject,
   parseScopeFlagList,
   resolveScanConfig,
+  resolveSeverities,
 } from './config.js';
 export type * from './diff.js';
 export { computeDiff } from './diff.js';
