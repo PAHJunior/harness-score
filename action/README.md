@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: paladini/harness-score/action@main
+      - uses: paladini/harness-score@main
         with:
           min-level: '3'          # fail below L3 (0 = report only)
           badge: 'harness-badge.svg'
@@ -23,6 +23,11 @@ jobs:
 A per-run summary (level + dimension table) appears in the job summary. To
 publish the badge, upload it as an artifact or commit it to a `badges`
 branch, then reference it from your README:
+
+Pin a full commit SHA instead of `main` in production workflows. The legacy
+`paladini/harness-score/action@<ref>` entrypoint remains compatible, but the
+root entrypoint is recommended because GitHub dependency-review can associate
+it with this repository's MIT license.
 
 ```markdown
 <img alt="Harness Score" src="https://raw.githubusercontent.com/<you>/<repo>/badges/harness-badge.svg" height="20">
@@ -51,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: paladini/harness-score/action@main
+      - uses: paladini/harness-score@main
         with:
           comment: 'true'
 ```
