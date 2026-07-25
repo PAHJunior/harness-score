@@ -1,9 +1,19 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { TOOL_PATHS } from '../../../plugins/shared/tool-paths.mjs';
 import { TOOLS } from '../../../plugins/shared/tools.mjs';
 import { PLUGIN_TOOL_PATHS } from '../src/harness/registry.js';
 
 describe('plugins/shared path config sync', () => {
+  test('the legacy GitHub Action entrypoint matches the canonical root action', () => {
+    const repoRoot = path.resolve(import.meta.dirname, '../../..');
+    const canonical = fs.readFileSync(path.join(repoRoot, 'action.yml'), 'utf8');
+    const legacy = fs.readFileSync(path.join(repoRoot, 'action/action.yml'), 'utf8');
+
+    expect(legacy).toBe(canonical);
+  });
+
   test('generated TOOL_PATHS matches PLUGIN_TOOL_PATHS from the CLI harness registry exactly', () => {
     for (const [toolId, paths] of Object.entries(PLUGIN_TOOL_PATHS)) {
       const tool = TOOL_PATHS[toolId as keyof typeof TOOL_PATHS];

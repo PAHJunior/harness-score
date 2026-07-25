@@ -163,7 +163,7 @@ rules file rots. Ratchet your level in CI:
 Or use the packaged action, which also emits the badge:
 
 ```yaml
-- uses: paladini/harness-score/action@main
+- uses: paladini/harness-score@main
   with:
     min-level: '3'
     badge: 'harness-badge.svg'
@@ -203,7 +203,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: paladini/harness-score/action@main
+      - uses: paladini/harness-score@main
         with: { badge: 'harness-badge.svg' }
       - uses: JamesIves/github-pages-deploy-action@v4
         with: { branch: badges, folder: ., clean: false }

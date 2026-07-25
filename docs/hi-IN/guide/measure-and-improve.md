@@ -141,7 +141,7 @@ Harness चुपचाप पीछे हट जाता है — किस
 या packaged action का उपयोग करें, जो बैज भी emit करता है:
 
 ```yaml
-- uses: paladini/harness-score/action@main
+- uses: paladini/harness-score@main
   with:
     min-level: '3'
     badge: 'harness-badge.svg'
@@ -177,7 +177,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: paladini/harness-score/action@main
+      - uses: paladini/harness-score@main
         with: { badge: 'harness-badge.svg' }
       - uses: JamesIves/github-pages-deploy-action@v4
         with: { branch: badges, folder: ., clean: false }
