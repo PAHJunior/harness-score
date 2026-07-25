@@ -1,0 +1,17 @@
+name: License fixture
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: paladini/harness-score@b655222f5c323008bb63869d382935413d3c98c7
+        with:
+          min-level: '0'
