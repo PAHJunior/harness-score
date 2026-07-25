@@ -1,5 +1,14 @@
 # harness-score
 
+## 1.3.3
+
+### Patch Changes
+
+- bed0c5c: Improve navigation contrast and control colors in the dark theme.
+- 6c80f21: Add the Harness Maturity Showcase to the shared documentation navigation.
+- 1fc1a2e: Expose the GitHub Action at the repository root so dependency-review can resolve the repository's MIT license.
+- 71a4f70: Align the documentation header with the Harness Maturity Showcase product shell.
+
 ## 1.3.2
 
 ### Patch Changes
