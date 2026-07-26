@@ -60,6 +60,7 @@
   --hs-header-ink: #0d1b17;
   --hs-header-line: #cbd4c7;
   --hs-header-green: #119366;
+  --vp-nav-bg-color: var(--hs-header-paper);
 }
 
 /* Shared product header: mirrors the Harness Maturity Showcase shell. */
