@@ -5,10 +5,12 @@ no npm token, no long-lived secret stored anywhere in this repo.
 
 1. **Verify green:** `npm test`, `npm run lint`, `npm run scan` (must report
    L4), `npm run docs:build`.
-2. **Bump versions together** — these three must always match:
+2. **Bump versions together** — these release surfaces must always match:
    - `packages/cli/package.json` (`version`)
    - `TOOL_VERSION` in `packages/cli/src/score.ts`
    - `version` in `packages/cli/jsr.json`
+   - the `packages/cli` workspace version in `package-lock.json`
+   - the `version` input default in `action.yml` and `action/action.yml`
    - If Cursor plugin content changed: `plugins/cursor/.cursor-plugin/plugin.json` +
      an entry in `plugins/cursor/CHANGELOG.md` (it has its own release
      track and version number).
@@ -22,10 +24,11 @@ no npm token, no long-lived secret stored anywhere in this repo.
    `npm run version-packages` — this runs `changeset version` (bumps
    `packages/cli/package.json` and writes `packages/cli/CHANGELOG.md` from
    the accumulated changesets) followed by `scripts/sync-version.mjs`,
-   which mirrors the new version into `TOOL_VERSION` and `jsr.json` (changesets
-   has no notion of either file, so this closes that gap). Review the diff,
-   then continue at step 3. If no changesets were added for a release,
-   bump all three by hand as before.
+   which mirrors the new version into every release surface listed above
+   (changesets has no notion of those project-specific files). Review the
+   diff, then continue at step 3. If no changesets were added for a release,
+   bump `packages/cli/package.json` by hand and run
+   `node scripts/sync-version.mjs`.
 3. Commit `release: vX.Y.Z`, tag `vX.Y.Z`, push with tags.
 4. Create a GitHub Release from that tag. If `packages/cli/CHANGELOG.md`
    gained an entry for this version (via changesets), copy that section
@@ -35,6 +38,11 @@ no npm token, no long-lived secret stored anywhere in this repo.
    # or, with no CHANGELOG.md entry for this release:
    gh release create vX.Y.Z --generate-notes
    ```
+   When the GitHub Action changed, select **Publish this Action to the GitHub
+   Marketplace** while drafting the release. Use **Code quality** as the
+   primary category and **Continuous integration** as the secondary category.
+   For the initial Marketplace release, use the title
+   `v1.5.1 — GitHub Marketplace launch`.
    This fires [`release.yml`](.github/workflows/release.yml), which
    publishes to all three registries automatically:
    - **npm** as [`harness-score`](https://www.npmjs.com/package/harness-score),
@@ -57,10 +65,20 @@ no npm token, no long-lived secret stored anywhere in this repo.
      release; all three still expose the same public API (checked by
      `packages/cli/test/golden-output.test.ts` and the `attw`/type-smoke
      checks against the npm-published shape).
-5. If npm Trusted Publishing isn't configured yet, `npm publish` in CI fails
+5. After the release workflow succeeds, move the matching stable Action major
+   tag (`v1` for a `v1.x.y` release) to the released commit and push it:
+   ```bash
+   git tag -f vN vX.Y.Z
+   git push origin vN --force
+   ```
+   For the Marketplace launch, `vN` is `v1` and `vX.Y.Z` is `v1.5.1`.
+   Do not move the major tag before the registry jobs and the released Action
+   have passed. Pushing this tag does not trigger the registry publication
+   workflow; only a published GitHub Release does.
+6. If npm Trusted Publishing isn't configured yet, `npm publish` in CI fails
    with a clear error; complete the one-time npmjs.com setup and re-run —
    no manual local publish is ever needed once it's wired up.
-6. **Cursor Marketplace:** the listing points at the repo, so most changes
+7. **Cursor Marketplace:** the listing points at the repo, so most changes
    need nothing further. Resubmit at
    [cursor.com/marketplace/publish](https://cursor.com/marketplace/publish)
    only if `plugins/cursor/.cursor-plugin/plugin.json` metadata (name,
@@ -69,7 +87,7 @@ no npm token, no long-lived secret stored anywhere in this repo.
    this git repo (`.claude-plugin/marketplace.json`). A `plugins/claude-code/.claude-plugin/plugin.json`
    version bump and a push to `main` is the entire release; users already
    on the marketplace pick it up via `/plugin marketplace update`.
-7. **Docs:** deploy automatically via
+8. **Docs:** deploy automatically via
    [`pages.yml`](.github/workflows/pages.yml) on every push to `main` — no
    manual step.
 

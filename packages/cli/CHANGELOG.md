@@ -1,5 +1,15 @@
 # harness-score
 
+## 1.5.1
+
+### Patch Changes
+
+- Prepare the GitHub Action for its Marketplace launch with concise metadata,
+  version-aligned execution, hardened input handling, stable `v1` usage, and an
+  end-to-end CI smoke test.
+- Keep the CLI, JSR manifest, lockfile, and both GitHub Action entrypoints
+  version-aligned automatically during future releases.
+
 ## 1.5.0
 
 ### Minor Changes

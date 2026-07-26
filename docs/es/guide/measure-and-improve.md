@@ -161,7 +161,7 @@ una rule se pudre. Traba tu nivel en CI:
 O usa la action empaquetada, que también emite el badge:
 
 ```yaml
-- uses: paladini/harness-score@main
+- uses: paladini/harness-score@v1
   with:
     min-level: '3'
     badge: 'harness-badge.svg'
@@ -199,7 +199,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: paladini/harness-score@main
+      - uses: paladini/harness-score@v1
         with: { badge: 'harness-badge.svg' }
       - uses: JamesIves/github-pages-deploy-action@v4
         with: { branch: badges, folder: ., clean: false }

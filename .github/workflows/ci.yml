@@ -19,6 +19,30 @@ jobs:
         run: npm run lint
       - name: Build, test & coverage gate
         run: npm run test:coverage
+      - name: Prepare GitHub Action smoke fixture
+        shell: bash
+        run: cp -R fixtures/level-4 "$RUNNER_TEMP/harness-action-fixture"
+      - name: Smoke test the packaged GitHub Action
+        id: action-smoke
+        uses: ./
+        with:
+          version: 'file:${{ github.workspace }}/packages/cli'
+          working-directory: ${{ runner.temp }}/harness-action-fixture
+          min-level: '4'
+          badge: 'harness-badge.svg'
+          report: 'harness-report.md'
+      - name: Verify GitHub Action outputs and artifacts
+        shell: bash
+        env:
+          HS_LEVEL: ${{ steps.action-smoke.outputs.level }}
+          HS_LEVEL_NAME: ${{ steps.action-smoke.outputs.level-name }}
+          HS_PERCENT: ${{ steps.action-smoke.outputs.percent }}
+        run: |
+          test "$HS_LEVEL" = "4"
+          test "$HS_LEVEL_NAME" = "Self-correcting"
+          test "$HS_PERCENT" = "100"
+          test -s "$RUNNER_TEMP/harness-action-fixture/harness-badge.svg"
+          test -s "$RUNNER_TEMP/harness-action-fixture/harness-report.md"
       - name: Consumer-facing type packaging check (typecheck:consumer)
         run: npm run typecheck:consumer -w harness-score
       - name: Published types match runtime exports (attw)

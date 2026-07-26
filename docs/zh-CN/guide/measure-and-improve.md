@@ -136,7 +136,7 @@ Harness 会静默退化 — 有人在清理时删掉 `hooks.json`，规则文件
 或使用打包 action，同时生成徽章：
 
 ```yaml
-- uses: paladini/harness-score@main
+- uses: paladini/harness-score@v1
   with:
     min-level: '3'
     badge: 'harness-badge.svg'
@@ -171,7 +171,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: paladini/harness-score@main
+      - uses: paladini/harness-score@v1
         with: { badge: 'harness-badge.svg' }
       - uses: JamesIves/github-pages-deploy-action@v4
         with: { branch: badges, folder: ., clean: false }
