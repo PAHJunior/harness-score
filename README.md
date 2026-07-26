@@ -170,7 +170,7 @@ The pill looks the same whether CI regenerates it or you pin a static file.
 
 ```yaml
 # .github/workflows/harness.yml
-- uses: paladini/harness-score@main
+- uses: paladini/harness-score@v1
   with: { badge: 'harness-badge.svg' }
 # publish harness-badge.svg to a badges branch or GitHub Pages, then:
 ```
@@ -249,7 +249,7 @@ harness-score --min-level 3
 Or in CI:
 
 ```yaml
-- uses: paladini/harness-score@main
+- uses: paladini/harness-score@v1
   with:
     min-level: '3'
 ```

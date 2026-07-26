@@ -1,8 +1,7 @@
 name: 'Harness Score'
 description: >-
-  Deterministic AI-harness maturity audit (Cursor-first): scans the repository,
-  reports a maturity level (L0–L4), optionally fails the build below a minimum
-  level, and emits an SVG badge and markdown report.
+  Deterministic AI-harness maturity audit with CI gates, reports, badges, and
+  pull-request score deltas.
 author: 'Fernando Paladini'
 branding:
   icon: 'shield'
@@ -26,9 +25,9 @@ inputs:
     required: false
     default: '.'
   version:
-    description: 'harness-score npm version to run.'
+    description: 'harness-score npm version or package spec to run.'
     required: false
-    default: 'latest'
+    default: '1.5.1'
   comment:
     description: >-
       Post (or update) a sticky pull-request comment showing the harness
@@ -76,16 +75,25 @@ runs:
     - id: scan
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        HS_BADGE: ${{ inputs.badge }}
+        HS_CONFIG: ${{ inputs.config }}
+        HS_GATE: ${{ inputs.gate }}
+        HS_INCLUDE_SYSTEM_HARNESS: ${{ inputs.include-system-harness }}
+        HS_INCLUDE_USER_HARNESS: ${{ inputs.include-user-harness }}
+        HS_MIN_LEVEL: ${{ inputs.min-level }}
+        HS_REPORT: ${{ inputs.report }}
+        HS_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
         ARGS=(--quiet --json)
-        [ -n "${{ inputs.badge }}" ] && ARGS+=(--badge "${{ inputs.badge }}")
-        [ -n "${{ inputs.report }}" ] && ARGS+=(--md "${{ inputs.report }}")
-        [ -n "${{ inputs.config }}" ] && ARGS+=(--config "${{ inputs.config }}")
-        [ "${{ inputs.include-user-harness }}" = "true" ] && ARGS+=(--scope user)
-        [ "${{ inputs.include-system-harness }}" = "true" ] && ARGS+=(--scope system)
-        [ -n "${{ inputs.gate }}" ] && ARGS+=(--gate "${{ inputs.gate }}")
-        npx -y "harness-score@${{ inputs.version }}" . "${ARGS[@]}" > harness-report.json
+        [ -n "$HS_BADGE" ] && ARGS+=(--badge "$HS_BADGE")
+        [ -n "$HS_REPORT" ] && ARGS+=(--md "$HS_REPORT")
+        [ -n "$HS_CONFIG" ] && ARGS+=(--config "$HS_CONFIG")
+        [ "$HS_INCLUDE_USER_HARNESS" = "true" ] && ARGS+=(--scope user)
+        [ "$HS_INCLUDE_SYSTEM_HARNESS" = "true" ] && ARGS+=(--scope system)
+        [ -n "$HS_GATE" ] && ARGS+=(--gate "$HS_GATE")
+        npx -y "harness-score@$HS_VERSION" . "${ARGS[@]}" > harness-report.json
 
         LEVEL=$(node -p "JSON.parse(require('fs').readFileSync('harness-report.json','utf8')).level.index")
         NAME=$(node -p "JSON.parse(require('fs').readFileSync('harness-report.json','utf8')).level.name")
@@ -110,8 +118,8 @@ runs:
           require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, '\n| Dimension | Score | % |\n|---|---|---|\n' + rows + '\n');
         "
 
-        if [ "$GATE_LEVEL" -lt "${{ inputs.min-level }}" ]; then
-          echo "::error::Harness ${GATE} L${GATE_LEVEL} is below required L${{ inputs.min-level }}."
+        if [ "$GATE_LEVEL" -lt "$HS_MIN_LEVEL" ]; then
+          echo "::error::Harness ${GATE} L${GATE_LEVEL} is below required L${HS_MIN_LEVEL}."
           echo "$GATE_GAPS"
           exit 1
         fi
@@ -120,12 +128,16 @@ runs:
       if: ${{ inputs.comment == 'true' && github.event_name == 'pull_request' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        HS_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        HS_VERSION: ${{ inputs.version }}
+        HS_WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        git fetch origin "${{ github.event.pull_request.base.ref }}"
+        git fetch origin "$HS_BASE_REF"
         git worktree remove /tmp/harness-score-base --force 2>/dev/null || true
         git worktree add /tmp/harness-score-base FETCH_HEAD
-        npx -y "harness-score@${{ inputs.version }}" "/tmp/harness-score-base/${{ inputs.working-directory }}" \
+        npx -y "harness-score@$HS_VERSION" "/tmp/harness-score-base/$HS_WORKING_DIRECTORY" \
           --quiet --json > /tmp/harness-score-base.json
         git worktree remove /tmp/harness-score-base --force
 
@@ -133,9 +145,11 @@ runs:
       if: ${{ inputs.comment == 'true' && github.event_name == 'pull_request' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        HS_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        npx -y "harness-score@${{ inputs.version }}" . --quiet --json \
+        npx -y "harness-score@$HS_VERSION" . --quiet --json \
           --diff /tmp/harness-score-base.json > /tmp/harness-score-diff.json
 
     - id: comment

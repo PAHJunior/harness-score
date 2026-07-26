@@ -11,12 +11,12 @@ description: Use when the user asks to release, publish, or version-bump harness
    `npm run version-packages` (runs `changeset version`, which bumps
    `packages/cli/package.json` and writes `packages/cli/CHANGELOG.md` from
    accumulated `.changeset/*.md` files, then `scripts/sync-version.mjs`,
-   which mirrors the new version into `TOOL_VERSION` and `jsr.json` —
-   changesets doesn't know about either file on its own). Review the diff.
-   If no changesets were added since the last release, bump all three by
-   hand instead:
-   - `packages/cli/package.json`, `TOOL_VERSION` in
-     `packages/cli/src/score.ts`, and `version` in `packages/cli/jsr.json`
+    which mirrors the new version into `TOOL_VERSION`, `jsr.json`,
+    `package-lock.json`, and both GitHub Action entrypoints — changesets
+    doesn't know about those project-specific files). Review the diff.
+    If no changesets were added since the last release, bump
+    `packages/cli/package.json` by hand and run
+    `node scripts/sync-version.mjs`.
    - `plugins/cursor/.cursor-plugin/plugin.json` (+ entry in
      `plugins/cursor/CHANGELOG.md`) — only if Cursor plugin content
      changed, it has its own release track
@@ -38,15 +38,22 @@ description: Use when the user asks to release, publish, or version-bump harness
    - **GitHub Packages** as `@paladini/harness-score` (automatic, uses the
      built-in `GITHUB_TOKEN`, no secret needed — the repo's Actions
      "Workflow permissions" must be set to Read and write).
-   - **JSR** as `@paladini/harness-score` (automatic via OIDC — but the
-     scope must be claimed once by the user at jsr.io/new before the first
-     publish succeeds).
-5. If npm Trusted Publishing isn't configured yet, `npm publish` in CI will
+    - **JSR** as `@paladini/harness-score` (automatic via OIDC — but the
+      scope must be claimed once by the user at jsr.io/new before the first
+      publish succeeds).
+   If the GitHub Action changed, select **Publish this Action to the GitHub
+   Marketplace**. Use **Code quality** as the primary category and
+   **Continuous integration** as the secondary category.
+5. After the release workflow succeeds, move the matching stable Action major
+   tag (`v1` for a `v1.x.y` release):
+   `git tag -f vN vX.Y.Z && git push origin vN --force`. Never move the major
+   tag before the released Action and registry jobs pass.
+6. If npm Trusted Publishing isn't configured yet, `npm publish` in CI will
    fail with a clear error; the user completes the one-time npmjs.com setup
    and the next run succeeds — no manual local publish needed once it's on.
-6. Cursor Marketplace: the listing updates from the repo — remind the user
+7. Cursor Marketplace: the listing updates from the repo — remind the user
    to resubmit at https://cursor.com/marketplace/publish only if
    `plugins/cursor/` metadata changed. Claude Code has no separate
    marketplace to resubmit to — see step 2.
-7. Docs deploy automatically via `.github/workflows/pages.yml` on push to
+8. Docs deploy automatically via `.github/workflows/pages.yml` on push to
    main.

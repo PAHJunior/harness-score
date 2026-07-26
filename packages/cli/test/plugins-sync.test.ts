@@ -14,6 +14,26 @@ describe('plugins/shared path config sync', () => {
     expect(legacy).toBe(canonical);
   });
 
+  test('the GitHub Action metadata stays Marketplace-ready and version-aligned', () => {
+    const repoRoot = path.resolve(import.meta.dirname, '../../..');
+    const metadata = fs.readFileSync(path.join(repoRoot, 'action.yml'), 'utf8');
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, 'packages/cli/package.json'), 'utf8'),
+    ) as { version: string };
+
+    const descriptionBlock = metadata.match(/^description: >-\r?\n(?<lines>(?: {2}.+\r?\n)+)author:/m);
+    const description = descriptionBlock?.groups?.lines
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .join(' ');
+    const actionVersion = metadata.match(/^ {2}version:\r?\n(?: {4}.+\r?\n)+? {4}default: '([^']+)'/m)?.[1];
+
+    expect(description).toBeDefined();
+    expect(description!.length).toBeLessThan(125);
+    expect(actionVersion).toBe(packageJson.version);
+  });
+
   test('generated TOOL_PATHS matches PLUGIN_TOOL_PATHS from the CLI harness registry exactly', () => {
     for (const [toolId, paths] of Object.entries(PLUGIN_TOOL_PATHS)) {
       const tool = TOOL_PATHS[toolId as keyof typeof TOOL_PATHS];
