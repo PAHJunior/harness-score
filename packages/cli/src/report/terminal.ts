@@ -155,6 +155,25 @@ export function renderTerminal(report: Report, diff?: ReportDiff | null): string
       lines.push(`     ${cyan(check.docsUrl)}`);
     }
   }
+  const warningKeys = new Set<string>();
+  const warnings = report.checks.flatMap((check) =>
+    (check.warnings ?? [])
+      .filter((warning) => {
+        const key = `${warning.code}\0${warning.source ?? ''}\0${warning.message}`;
+        if (warningKeys.has(key)) return false;
+        warningKeys.add(key);
+        return true;
+      })
+      .map((warning) => ({ checkId: check.id, ...warning })),
+  );
+  if (warnings.length > 0) {
+    lines.push('');
+    lines.push(yellow(bold(`  Warnings (${warnings.length}):`)));
+    for (const warning of warnings) {
+      const source = warning.source ? ` ${dim(`[${warning.source}]`)}` : '';
+      lines.push(`   ${yellow(WARN)} ${bold(warning.checkId)} ${warning.code}: ${warning.message}${source}`);
+    }
+  }
   lines.push('');
   if (report.level.nextLevelGaps.length > 0) {
     lines.push(`  ${bold(`To reach L${report.level.index + 1}:`)} ${report.level.nextLevelGaps.join('; ')}`);

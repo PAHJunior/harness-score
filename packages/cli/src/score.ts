@@ -40,6 +40,7 @@ function runChecks(ctx: ScanContext, severities: Map<string, ResolvedSeverity>):
       remediation: check.remediation,
       docsUrl: `${DOCS_BASE_URL}#${check.id.toLowerCase()}`,
       severity: severities.get(check.id)?.severity ?? 'error',
+      ...(outcome.warnings ? { warnings: outcome.warnings } : {}),
     };
   });
 }

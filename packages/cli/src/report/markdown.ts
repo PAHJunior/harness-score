@@ -109,6 +109,26 @@ export function renderMarkdown(report: Report, diff?: ReportDiff | null): string
       `| ${status} | [${check.id}](${check.docsUrl}) ${check.title} | ${check.earned}/${check.points} | ${check.evidence.replace(/\|/g, '\\|')} |`,
     );
   }
+  const warningKeys = new Set<string>();
+  const warnings = report.checks.flatMap((check) =>
+    (check.warnings ?? [])
+      .filter((warning) => {
+        const key = `${warning.code}\0${warning.source ?? ''}\0${warning.message}`;
+        if (warningKeys.has(key)) return false;
+        warningKeys.add(key);
+        return true;
+      })
+      .map((warning) => ({ checkId: check.id, ...warning })),
+  );
+  if (warnings.length > 0) {
+    lines.push('');
+    lines.push('## Warnings');
+    lines.push('');
+    for (const warning of warnings) {
+      const source = warning.source ? ` Source: \`${warning.source.replace(/`/g, '\\`')}\`.` : '';
+      lines.push(`- **${warning.checkId} / ${warning.code}:** ${warning.message}${source}`);
+    }
+  }
   const failed = report.checks.filter((c) => !c.passed && c.severity !== 'off');
   if (failed.length > 0) {
     lines.push('');

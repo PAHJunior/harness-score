@@ -30,10 +30,19 @@ export interface ScanContext {
   matching(re: RegExp): string[];
 }
 
+/** Non-fatal diagnostic attached to a check result. */
+export interface ScanDiagnostic {
+  code: string;
+  message: string;
+  source?: string;
+}
+
 export interface CheckOutcome {
   passed: boolean;
   /** Human-readable proof: what was found (or not found) and where. */
   evidence: string;
+  /** Forward-compatible or secondary findings that do not change points. */
+  warnings?: ScanDiagnostic[];
 }
 
 export interface Check {
@@ -59,6 +68,8 @@ export interface CheckResult {
   docsUrl: string;
   /** Resolved severity ('off' checks are excluded from scoring but still listed here). */
   severity: Severity;
+  /** Non-fatal diagnostics emitted while evaluating this check. */
+  warnings?: ScanDiagnostic[];
 }
 
 export interface DimensionScore {

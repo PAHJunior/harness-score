@@ -31,6 +31,7 @@ import {
   renderTerminal,
   resolveSeverities,
   type ScanContext,
+  type ScanDiagnostic,
   type Severity,
   score,
   TOOL_DISPLAY_NAMES,
@@ -54,6 +55,7 @@ const dimensionScore: DimensionScore = scored.dimensions[0]!;
 const levelInfo: LevelInfo = scored.level;
 const checkOutcome: CheckOutcome = { passed: true, evidence: 'x' };
 const checkResult: CheckResult = scored.checks[0]!;
+const diagnostic: ScanDiagnostic = { code: 'future-event', message: 'x', source: '.claude/settings.json' };
 const checkDelta: CheckDelta | undefined = diff.checksChanged[0];
 const dimensionDelta: DimensionDelta = diff.dimensions[0]!;
 const toolId: ToolId = 'cursor';
@@ -79,6 +81,7 @@ void [
   levelInfo,
   checkOutcome,
   checkResult,
+  diagnostic,
   checkDelta,
   dimensionDelta,
   toolId,

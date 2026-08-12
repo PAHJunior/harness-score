@@ -103,6 +103,27 @@ describe('renderTerminal', () => {
     expect(out).toContain('measure-and-improve#ctx-01');
   });
 
+  test('renders additive check warnings with code and source', () => {
+    const report = makeReport({
+      checks: [
+        makeCheck({
+          passed: true,
+          warnings: [
+            {
+              code: 'unknown-hook-event',
+              message: 'FutureEvent is not cataloged.',
+              source: '.claude/settings.json',
+            },
+          ],
+        }),
+      ],
+    });
+    const out = renderTerminal(report);
+    expect(out).toContain('Warnings (1):');
+    expect(out).toContain('unknown-hook-event');
+    expect(out).toContain('.claude/settings.json');
+  });
+
   test('shows detected harnesses with display names, only when non-empty', () => {
     const detected = makeReport({ detectedHarnesses: ['cursor', 'claude-code'] });
     expect(renderTerminal(detected)).toContain('Detected: Cursor, Claude Code');

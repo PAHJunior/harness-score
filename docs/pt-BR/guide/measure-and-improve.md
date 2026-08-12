@@ -529,16 +529,33 @@ alone; without them the subagent is never invoked.
 
 ### Hooks & Guardrails (14 pts)
 
-#### HKS-01 · Hooks configuration present and valid — 4 pts {#hks-01}
-`.cursor/hooks.json` or `.claude/settings.json` (`hooks` key) exists and parses as JSON.
-**Correção:** create hooks config and grow from the
-receitas no [capítulo 5](./guardrails-and-safety#gate-hooks).
+Os artefatos do harness são reconhecidos tanto a partir da raiz do repositório, pelo caminho
+canônico, quanto quando o próprio diretório da ferramenta é a raiz do scan. Por exemplo, ao
+escanear `.claude`, os caminhos físicos `settings.json`, `hooks/`, `skills/` e `agents/` são
+reconhecidos como seus equivalentes `.claude/...`. Raízes genéricas com outro nome não recebem
+esse tratamento. A evidência sempre usa o caminho físico que foi lido.
 
-#### HKS-02 · Known events, version declared — 2 pts {#hks-02}
-Version/metadata present; every registered event is documented for your tool
-(Cursor lifecycle events, or Claude Code `PreToolUse`/`PostToolUse`).
-**Correção:** typo'd event names fail silently — check against the event list in
-[capítulo 2](./cursor-harness-surface#hooks-observe-and-control-the-agent-loop).
+#### HKS-01 · Hooks configuration present and valid JSON — 4 pts {#hks-01}
+`.cursor/hooks.json` ou `.claude/settings.json` (chave `hooks`) existe, parseia como JSON e contém
+um objeto de hooks. Quando há várias configurações, uma configuração válida e não vazia vence;
+profundidade da raiz nativa, quantidade de eventos e caminho lexical são os desempates
+determinísticos.
+**Correção:** crie a configuração de hooks e evolua a partir das receitas do
+[capítulo 5](./guardrails-and-safety#gate-hooks).
+
+#### HKS-02 · Hook events and handlers are structurally valid — 2 pts {#hks-02}
+O mapa de eventos não está vazio, todo evento contém handlers válidos e os metadados obrigatórios
+do fornecedor, como `version` no Cursor, estão presentes. Handlers do Claude Code podem usar
+`command`, `http`, `mcp_tool`, `prompt` ou `agent`; cada tipo deve fornecer seus campos
+obrigatórios. O catálogo inclui os 31 eventos documentados do Claude Code: `SessionStart`,
+`Setup`, `InstructionsLoaded`, `UserPromptSubmit`, `UserPromptExpansion`, `MessageDisplay`,
+`PreToolUse`, `PermissionRequest`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch`,
+`PermissionDenied`, `Notification`, `SubagentStart`, `SubagentStop`, `TaskCreated`,
+`TaskCompleted`, `Stop`, `StopFailure`, `TeammateIdle`, `ConfigChange`, `CwdChanged`,
+`DirectoryAdded`, `FileChanged`, `WorktreeCreate`, `WorktreeRemove`, `PreCompact`, `PostCompact`,
+`SessionEnd`, `Elicitation` e `ElicitationResult`.
+**Compatibilidade futura:** um evento desconhecido, mas estruturalmente válido, preserva os pontos
+e emite o warning `unknown-hook-event`. Eventos vazios ou malformados continuam reprovando.
 
 #### HKS-03 · Gate hook guards risky operations — 4 pts {#hks-03}
 A gate hook registered (Cursor: `beforeShellExecution`, `beforeMCPExecution`,
@@ -553,9 +570,12 @@ Claude Code: `PostToolUse`).
 session.
 
 #### HKS-05 · Hook scripts committed — 2 pts {#hks-05}
-Scripts referenced by the hooks config exist in the repository.
-**Correção:** commit them; a hook pointing at a missing script fails open on
-every machine but the author's.
+Todo caminho local do repositório encontrado no executável, no comando de shell ou em uma entrada
+de `args` resolve para um arquivo commitado. Caminhos canônicos prefixados pelo projeto, como
+`${CLAUDE_PROJECT_DIR}/.claude/hooks/check.js`, também resolvem para o caminho físico
+`hooks/check.js` quando `.claude` é a raiz do scan. Handlers válidos que não executam comandos
+passam sem scripts locais aplicáveis.
+**Correção:** commite todo script local referenciado; um único caminho ausente reprova o HKS-05.
 
 ### Sensors & Feedback (20 pts)
 

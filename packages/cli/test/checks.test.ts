@@ -169,16 +169,23 @@ describe('skills checks', () => {
 describe('hook checks', () => {
   test('HKS-01 fails on invalid JSON', async () => {
     const ctx = fakeContext({ '.cursor/hooks.json': '{ not json' });
-    expect((await check('HKS-01')).run(ctx).passed).toBe(false);
+    const outcome = (await check('HKS-01')).run(ctx);
+    expect(outcome.passed).toBe(false);
+    expect(outcome.warnings).toEqual([
+      expect.objectContaining({ code: 'invalid-hook-config', source: '.cursor/hooks.json' }),
+    ]);
   });
 
-  test('HKS-02 flags unknown event names', async () => {
+  test('HKS-02 preserves points for structurally valid future events and emits a warning', async () => {
     const ctx = fakeContext({
       '.cursor/hooks.json': JSON.stringify({ version: 1, hooks: { onFileSave: [{ command: 'x' }] } }),
     });
     const outcome = (await check('HKS-02')).run(ctx);
-    expect(outcome.passed).toBe(false);
+    expect(outcome.passed).toBe(true);
     expect(outcome.evidence).toContain('onFileSave');
+    expect(outcome.warnings).toEqual([
+      expect.objectContaining({ code: 'unknown-hook-event', source: '.cursor/hooks.json' }),
+    ]);
   });
 
   test('HKS-05 flags hook scripts that do not exist', async () => {
