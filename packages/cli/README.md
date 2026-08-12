@@ -84,6 +84,12 @@ project before each release.
 - run: npx harness-score --min-level 3
 ```
 
+The exit status follows the snapshot selected by `--gate`. An incomplete gated
+snapshot exits 2. If `maturity` is complete and only an additional `effective`
+scope is incomplete, `--gate maturity` can still pass and reports the effective
+snapshot as unavailable. JSON output keeps incomplete values for diagnosis and
+marks their authority through `verdicts`.
+
 Or use the [packaged GitHub Action](https://github.com/paladini/harness-score/tree/main/action),
 which also emits the badge.
 

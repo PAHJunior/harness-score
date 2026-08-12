@@ -179,12 +179,16 @@
 
 ## CLI 标志（扫描配置）
 
+仓库 maturity 发现没有生产环境深度上限。跳过已知依赖和生成目录后，它会包含 tracked、
+untracked 和 ignored 文件。仓库扫描中的 `file-count-limit` 表示 1,000,000 个文件的
+紧急保险丝；有界的 user 和 extra-root overlay 仍可能报告 `depth-limit`。
+
 | 标志 | 含义 |
 |---|---|
 | `--config <file>` | 从指定路径加载配置 |
 | `--scope user` | 启用 user scope（逗号分隔：`user`、`system`） |
 | `--gate maturity\|effective` | `--min-level` 使用的分数 |
-| `--min-level <0-4>` | 完整 gated 分数低于等级时 exit 1；任何请求的 scope 不完整时始终 exit 2 |
+| `--min-level <0-4>` | 完整 gated 分数低于等级时 exit 1；gate 选择的 snapshot 不完整时 exit 2 |
 | `--json` | 完整报告，含 `scopes`、`gate`、`effective` 与 `verdicts` |
 
 ## GitHub Action 输入
@@ -198,7 +202,7 @@
 | `min-level` | `0` | gated 分数低于等级时失败 |
 
 Outputs：`level`、`level-name`、`percent`（maturity）；`effective-level`、`effective-percent`。
-若请求的 scope 不完整，Action 会在发布这些 outputs、badge、Markdown 报告、job summary 或 PR comment 前失败。
+Action 仅在 maturity 完整时发布 maturity outputs、badge 和报告，仅在 effective 完整时发布 effective outputs。若只有 effective 不完整，`gate: maturity` 可在给出警告后通过；`gate: effective` 返回 exit 2。Maturity 不完整时不发布 maturity outputs、badge、报告或 PR comment。
 
 ## 报告 JSON 字段（稳定）
 
@@ -221,6 +225,6 @@ Outputs：`level`、`level-name`、`percent`（maturity）；`effective-level`�
 | `verdicts.*.reasons[]` | `file-count-limit`、`depth-limit` 或 `unreadable-directory`，可带 `path` 与 `limit` |
 | `truncated` | 兼容别名；任一请求的 snapshot 因任何原因不完整时为 `true` |
 
-`level`、`score`、dimensions 与 checks 仍会保留用于诊断，但对应 verdict 为 `incomplete` 时仅是 provisional。Terminal 与 Markdown 会显示 maturity unavailable，badge 值为 `incomplete`，绝不显示 L0-L4。旧报告缺少 `verdicts` 时，`truncated: false` 视为完整，`truncated: true` 视为不完整。
+`level`、`score`、dimensions 与 checks 仍会保留用于诊断，但对应 verdict 为 `incomplete` 时仅是 provisional。Terminal 与 Markdown 会明确指出不可用的 snapshot。Badge 始终表示 maturity；当 maturity 不完整时值为 `incomplete`，绝不显示 L0-L4。旧报告缺少 `verdicts` 时，`truncated: false` 视为完整，`truncated: true` 视为不完整。
 
-`--diff` 默认比较 **maturity** 字段（顶层 `level` / `score` / `checks`），并拒绝不完整的 baseline 或当前结果。
+`--diff` 默认比较 **maturity** 字段（顶层 `level` / `score` / `checks`），并拒绝 maturity 不完整的 baseline 或当前结果。Effective 不完整不会阻止 maturity diff。

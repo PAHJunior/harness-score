@@ -182,12 +182,19 @@ Excluir uma dimensão inteira tem uma consequência honesta que vale saber de an
 
 ## Flags da CLI (configuração do scan)
 
+A descoberta de maturity no repositório não possui limite de profundidade em
+produção. Ela inclui arquivos rastreados, não rastreados e ignorados depois de
+pular diretórios conhecidos de dependências e artefatos gerados.
+`file-count-limit` representa um fusível emergencial de 1.000.000 de arquivos
+para o repositório; overlays limitados de user e extra roots ainda podem
+reportar `depth-limit`.
+
 | Flag | Significado |
 |---|---|
 | `--config <file>` | Carregar config de caminho específico |
 | `--scope user` | Habilitar escopo user (separados por vírgula: `user`, `system`) |
 | `--gate maturity\|effective` | Pontuação usada para `--min-level` |
-| `--min-level <0-4>` | Exit 1 quando uma pontuação gated completa está abaixo do nível; escopos solicitados incompletos sempre retornam exit 2 |
+| `--min-level <0-4>` | Exit 1 quando a pontuação gated completa está abaixo do nível; snapshot selecionado pelo gate incompleto retorna exit 2 |
 | `--json` | Relatório completo incluindo `scopes`, `gate`, `effective` e `verdicts` |
 
 ## Inputs da GitHub Action
@@ -201,7 +208,7 @@ Excluir uma dimensão inteira tem uma consequência honesta que vale saber de an
 | `min-level` | `0` | Falha quando pontuação gated está abaixo do nível |
 
 Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effective-percent`.
-Se um escopo solicitado estiver incompleto, a Action falha antes de publicar esses outputs, badge, relatório Markdown, resumo do job ou comentário na PR.
+A Action publica outputs, badge e relatório de maturity somente quando maturity está completo, e outputs de effective somente quando effective está completo. Se apenas effective estiver incompleto, `gate: maturity` pode passar com um aviso; `gate: effective` retorna exit 2. Maturity incompleto não publica outputs de maturity, badge, relatório ou comentário na PR.
 
 ## Campos JSON do relatório (estáveis)
 
@@ -224,6 +231,6 @@ Se um escopo solicitado estiver incompleto, a Action falha antes de publicar ess
 | `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — a severidade resolvida usada por este scan para aquele check |
 | `checks[].warnings` | Diagnósticos opcionais e não fatais `{ code, message, source? }`; terminal e Markdown os exibem sem alterar pontos |
 
-`level`, `score`, dimensões e checks continuam presentes para diagnóstico, mas são provisórios quando o veredito correspondente é `incomplete`. Terminal e Markdown informam que a maturidade está indisponível, e o badge usa `incomplete`, nunca L0-L4. Relatórios antigos sem `verdicts` são completos quando `truncated` é `false` e incompletos quando é `true`.
+`level`, `score`, dimensões e checks continuam presentes para diagnóstico, mas são provisórios quando o veredito correspondente é `incomplete`. Terminal e Markdown identificam o snapshot indisponível. O badge sempre representa maturity e usa `incomplete`, nunca L0-L4, quando maturity está incompleto. Relatórios antigos sem `verdicts` são completos quando `truncated` é `false` e incompletos quando é `true`.
 
-`--diff` compara campos de **maturity** por padrão (top-level `level` / `score` / `checks`) e rejeita baseline ou resultado atual incompleto.
+`--diff` compara campos de **maturity** por padrão (top-level `level` / `score` / `checks`) e rejeita baseline ou resultado atual com maturity incompleto. Effective incompleto não bloqueia um diff de maturity.

@@ -125,6 +125,13 @@ A high score means the *infrastructure* for reliable agent work exists. It's
 necessary, not sufficient — and that's the honest ceiling of what any
 deterministic scanner can claim.
 
+The repository scan walks the complete relevant filesystem tree, including
+tracked, untracked, and ignored files. It skips known dependency and generated
+directories, and it never reads file bodies larger than 512 KiB. An emergency
+fuse stops pathological trees above 1,000,000 files; hitting that fuse or an
+unreadable directory marks the affected snapshot as incomplete instead of
+publishing its score as authoritative.
+
 ## Stability & versioning
 
 As of **v1.0.0**, Harness Score follows [semantic versioning](https://semver.org/)
