@@ -60,6 +60,9 @@ for (const fileCount of FILE_COUNTS) {
     const start = process.hrtime.bigint();
     const report = score(root);
     const end = process.hrtime.bigint();
+    if (report.verdicts?.maturity.status !== 'complete') {
+      throw new Error(`Benchmark scan was incomplete at ${fileCount} files.`);
+    }
     const ms = Number(end - start) / 1e6;
     const rss = process.memoryUsage().rss;
     timings.push(ms);
