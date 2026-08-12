@@ -88,5 +88,33 @@ describe('buildReport shape', () => {
     expect(report.tool.version).toBe(TOOL_VERSION);
     expect(report.root).toBe(ctx.root);
     expect(report.truncated).toBe(ctx.truncated);
+    expect(report.verdicts).toEqual({
+      maturity: { status: 'complete', reasons: [] },
+      effective: { status: 'complete', reasons: [] },
+    });
+  });
+
+  test('converts a legacy truncated context to a fail-closed file-count verdict', () => {
+    const ctx = { ...fakeContext({}), truncated: true };
+    const report = buildReportFromScanContext(ctx);
+    expect(report.truncated).toBe(true);
+    expect(report.verdicts?.maturity).toEqual({
+      status: 'incomplete',
+      reasons: [{ code: 'file-count-limit' }],
+    });
+  });
+
+  test('preserves explicit incomplete reasons even when legacy truncated is false', () => {
+    const ctx = {
+      ...fakeContext({}),
+      truncated: false,
+      incompleteReasons: [{ code: 'depth-limit' as const, path: 'a/b', limit: 10 }],
+    };
+    const report = buildReportFromScanContext(ctx);
+    expect(report.truncated).toBe(true);
+    expect(report.verdicts?.effective).toEqual({
+      status: 'incomplete',
+      reasons: [{ code: 'depth-limit', path: 'a/b', limit: 10 }],
+    });
   });
 });

@@ -1,6 +1,7 @@
 import type { ReportDiff } from '../diff.js';
 import { toolDisplayName } from '../harness/registry.js';
 import type { Report } from '../types.js';
+import { formatIncompleteReason, reportScopeIsComplete, reportVerdict } from '../verdict.js';
 
 const useColor = process.stdout.isTTY === true && process.env.NO_COLOR === undefined;
 
@@ -77,8 +78,19 @@ function renderDiffSection(diff: ReportDiff): string[] {
 
 function effectiveDiffers(report: Report): boolean {
   return (
+    reportVerdict(report, 'effective').status !== reportVerdict(report, 'maturity').status ||
     report.effective.level.index !== report.level.index ||
     report.effective.score.percent !== report.score.percent
+  );
+}
+
+function hasEffectiveScope(report: Report): boolean {
+  return report.scopes.effective.some((scope) => scope !== 'repo');
+}
+
+function renderIncompleteReasons(report: Report, scope: 'maturity' | 'effective'): string[] {
+  return reportVerdict(report, scope).reasons.map(
+    (reason) => `    ${yellow(WARN)} ${scope}: ${formatIncompleteReason(reason)}`,
   );
 }
 
@@ -89,28 +101,43 @@ function formatScopes(scopes: string[]): string {
 export function renderTerminal(report: Report, diff?: ReportDiff | null): string {
   const lines: string[] = [];
   const levelPaint = LEVEL_COLOR[report.level.index] ?? red;
+  const maturityComplete = reportScopeIsComplete(report, 'maturity');
+  const effectiveComplete = reportScopeIsComplete(report, 'effective');
+  const showEffective = hasEffectiveScope(report) || effectiveDiffers(report);
   lines.push('');
   lines.push(bold(`  harness-score v${report.tool.version}`) + dim(`  ${report.root}`));
   lines.push('');
-  if (report.truncated) {
-    lines.push(
-      yellow(
-        `  ${WARN} Scan stopped early after hitting the file-count cap ${MIDDOT} results below may be incomplete.`,
-      ),
-    );
+  if (!maturityComplete || (showEffective && !effectiveComplete)) {
+    lines.push(yellow(`  ${WARN} Incomplete scan ${MIDDOT} provisional results are not authoritative.`));
+    if (!maturityComplete) lines.push(...renderIncompleteReasons(report, 'maturity'));
+    if (showEffective && !effectiveComplete) lines.push(...renderIncompleteReasons(report, 'effective'));
     lines.push('');
   }
-  const cappedMarker = report.level.capped ? ` ${yellow('(capped)')}` : '';
-  lines.push(
-    `  ${bold('Maturity:')} ${levelPaint(bold(`L${report.level.index} ${MIDDOT} ${report.level.name}`))}${cappedMarker}` +
-      `   ${bold('Score:')} ${report.score.earned}/${report.score.max} (${report.score.percent}%)` +
-      dim(`   scopes: ${formatScopes(report.scopes.maturity)}`),
-  );
-  if (effectiveDiffers(report)) {
+  if (maturityComplete) {
+    const cappedMarker = report.level.capped ? ` ${yellow('(capped)')}` : '';
+    lines.push(
+      `  ${bold('Maturity:')} ${levelPaint(bold(`L${report.level.index} ${MIDDOT} ${report.level.name}`))}${cappedMarker}` +
+        `   ${bold('Score:')} ${report.score.earned}/${report.score.max} (${report.score.percent}%)` +
+        dim(`   scopes: ${formatScopes(report.scopes.maturity)}`),
+    );
+  } else {
+    lines.push(
+      `  ${bold('Maturity:')} ${yellow(bold('unavailable - incomplete scan'))}` +
+        `   ${bold('Provisional score:')} ${report.score.earned}/${report.score.max} (${report.score.percent}%)` +
+        dim(`   scopes: ${formatScopes(report.scopes.maturity)}`),
+    );
+  }
+  if (showEffective && effectiveComplete) {
     const effPaint = LEVEL_COLOR[report.effective.level.index] ?? red;
     lines.push(
       `  ${bold('Effective:')} ${effPaint(bold(`L${report.effective.level.index} ${MIDDOT} ${report.effective.level.name}`))}` +
         `   ${bold('Score:')} ${report.effective.score.earned}/${report.effective.score.max} (${report.effective.score.percent}%)` +
+        dim(`   scopes: ${formatScopes(report.scopes.effective)}`),
+    );
+  } else if (showEffective) {
+    lines.push(
+      `  ${bold('Effective:')} ${yellow(bold('unavailable - incomplete scan'))}` +
+        `   ${bold('Provisional score:')} ${report.effective.score.earned}/${report.effective.score.max} (${report.effective.score.percent}%)` +
         dim(`   scopes: ${formatScopes(report.scopes.effective)}`),
     );
   }
@@ -131,6 +158,7 @@ export function renderTerminal(report: Report, diff?: ReportDiff | null): string
   if (diff) {
     lines.push(...renderDiffSection(diff));
   }
+  if (!maturityComplete) lines.push(bold('  Provisional dimensions:'));
   for (const dimension of report.dimensions) {
     if (!dimension.applicable) {
       lines.push(`  ${dimension.title.padEnd(20)} ${dim('excluded by preset')}`);
@@ -145,9 +173,13 @@ export function renderTerminal(report: Report, diff?: ReportDiff | null): string
 
   const failed = report.checks.filter((c) => !c.passed && c.severity !== 'off');
   if (failed.length === 0) {
-    lines.push(green(`  All checks passed ${MIDDOT} this repository is fully harnessed.`));
+    lines.push(
+      maturityComplete
+        ? green(`  All checks passed ${MIDDOT} this repository is fully harnessed.`)
+        : yellow(`  All provisional checks passed ${MIDDOT} completeness is required before a verdict.`),
+    );
   } else {
-    lines.push(bold(`  Improvements (${failed.length}):`));
+    lines.push(bold(`  ${maturityComplete ? '' : 'Provisional '}Improvements (${failed.length}):`));
     for (const check of failed) {
       lines.push(`   ${red(CROSS)} ${bold(check.id)} ${check.title} ${dim(`(+${check.points} pts)`)}`);
       lines.push(`     ${check.remediation}`);
@@ -175,7 +207,7 @@ export function renderTerminal(report: Report, diff?: ReportDiff | null): string
     }
   }
   lines.push('');
-  if (report.level.nextLevelGaps.length > 0) {
+  if (maturityComplete && report.level.nextLevelGaps.length > 0) {
     lines.push(`  ${bold(`To reach L${report.level.index + 1}:`)} ${report.level.nextLevelGaps.join('; ')}`);
     if (report.level.capped && report.level.capReason) {
       lines.push(yellow(`  ${WARN} ${report.level.capReason}`));

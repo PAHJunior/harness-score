@@ -1,4 +1,5 @@
 import type { DimensionId, Report } from './types.js';
+import { reportScopeIsComplete } from './verdict.js';
 
 export interface DimensionDelta {
   id: DimensionId;
@@ -50,6 +51,9 @@ const EMPTY_PRESET: Report['preset'] = { extends: [], rules: {}, resolved: [] };
  * regression or improvement in the scanned repository.
  */
 export function computeDiff(baseline: Report, current: Report): ReportDiff {
+  if (!reportScopeIsComplete(baseline, 'maturity') || !reportScopeIsComplete(current, 'maturity')) {
+    throw new Error('Cannot compare incomplete maturity reports.');
+  }
   const baselineChecks = new Map(baseline.checks.map((c) => [c.id, c]));
   const checksChanged: CheckDelta[] = [];
   for (const check of current.checks) {

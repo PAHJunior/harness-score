@@ -187,8 +187,8 @@ Excluir uma dimensão inteira tem uma consequência honesta que vale saber de an
 | `--config <file>` | Carregar config de caminho específico |
 | `--scope user` | Habilitar escopo user (separados por vírgula: `user`, `system`) |
 | `--gate maturity\|effective` | Pontuação usada para `--min-level` |
-| `--min-level <0-4>` | Exit 1 quando pontuação gated está abaixo do nível |
-| `--json` | Relatório completo incluindo `scopes`, `gate`, `effective` |
+| `--min-level <0-4>` | Exit 1 quando uma pontuação gated completa está abaixo do nível; escopos solicitados incompletos sempre retornam exit 2 |
+| `--json` | Relatório completo incluindo `scopes`, `gate`, `effective` e `verdicts` |
 
 ## Inputs da GitHub Action
 
@@ -201,6 +201,7 @@ Excluir uma dimensão inteira tem uma consequência honesta que vale saber de an
 | `min-level` | `0` | Falha quando pontuação gated está abaixo do nível |
 
 Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effective-percent`.
+Se um escopo solicitado estiver incompleto, a Action falha antes de publicar esses outputs, badge, relatório Markdown, resumo do job ou comentário na PR.
 
 ## Campos JSON do relatório (estáveis)
 
@@ -214,11 +215,15 @@ Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effect
 | `level`, `score`, `dimensions`, `checks` | Snapshot de **maturity** |
 | `effective` | Mesma forma: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | Ferramentas vistas no **repo** (informativo) |
-| `truncated` | Walk atingiu limite de arquivos |
+| `verdicts.maturity`, `verdicts.effective` | Status de completude e motivos determinísticos de cada snapshot: `complete` ou `incomplete` |
+| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit` ou `unreadable-directory`, com `path` e `limit` opcionais |
+| `truncated` | Alias de compatibilidade; `true` quando qualquer snapshot solicitado está incompleto por qualquer motivo |
 | `preset` | `{ extends, rules, resolved }` — personalização de equipe efetivamente aplicada; `resolved` só lista checks cuja severidade difere do padrão |
 | `level.capped`, `level.capReason` | `capped` é `true` quando um requisito bloqueante do próximo nível nunca pode ser satisfeito sob a config atual (ex.: dimensão excluída por preset); `capReason` explica o motivo |
 | `dimensions[].applicable` | `false` só quando todo check daquela dimensão resolveu para `"off"` |
 | `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — a severidade resolvida usada por este scan para aquele check |
 | `checks[].warnings` | Diagnósticos opcionais e não fatais `{ code, message, source? }`; terminal e Markdown os exibem sem alterar pontos |
 
-`--diff` compara campos de **maturity** por padrão (top-level `level` / `score` / `checks`).
+`level`, `score`, dimensões e checks continuam presentes para diagnóstico, mas são provisórios quando o veredito correspondente é `incomplete`. Terminal e Markdown informam que a maturidade está indisponível, e o badge usa `incomplete`, nunca L0-L4. Relatórios antigos sem `verdicts` são completos quando `truncated` é `false` e incompletos quando é `true`.
+
+`--diff` compara campos de **maturity** por padrão (top-level `level` / `score` / `checks`) e rejeita baseline ou resultado atual incompleto.

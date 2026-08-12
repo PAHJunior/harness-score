@@ -3,10 +3,24 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ExtraRootEntry } from '../config.js';
 import type { ScanOverlay } from '../scan.js';
+import type { ScanIncompleteReason } from '../types.js';
+import { compareLexically } from '../util.js';
 import { PATH_SPECS } from './registry.js';
 
 const OVERLAY_MAX_DEPTH = 8;
 const OVERLAY_MAX_FILES = 5000;
+
+interface CollectionResult {
+  incompleteReasons: ScanIncompleteReason[];
+}
+
+function addFirstReason(reasons: ScanIncompleteReason[], reason: ScanIncompleteReason): void {
+  if (!reasons.some((entry) => entry.code === reason.code)) reasons.push(reason);
+}
+
+function mergeReasons(target: ScanIncompleteReason[], source: ScanIncompleteReason[]): void {
+  for (const reason of source) addFirstReason(target, reason);
+}
 
 /** Repo-relative paths that may appear under user/system/extra harness trees. */
 function isHarnessRelPath(relPath: string): boolean {
@@ -33,22 +47,30 @@ function collectDir(
   relPrefix: string,
   files: Map<string, string>,
   depth = 0,
-): { truncated: boolean } {
-  let truncated = false;
-  if (depth > OVERLAY_MAX_DEPTH) return { truncated };
+): CollectionResult {
+  const incompleteReasons: ScanIncompleteReason[] = [];
   const stat = safeStat(absDir);
-  if (!stat?.isDirectory()) return { truncated };
+  if (!stat?.isDirectory()) return { incompleteReasons };
 
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(absDir, { withFileTypes: true });
   } catch {
-    return { truncated };
+    addFirstReason(incompleteReasons, {
+      code: 'unreadable-directory',
+      path: relPrefix || '.',
+    });
+    return { incompleteReasons };
   }
+  entries.sort((a, b) => compareLexically(a.name, b.name));
 
   for (const entry of entries) {
     if (files.size >= OVERLAY_MAX_FILES) {
-      truncated = true;
+      addFirstReason(incompleteReasons, {
+        code: 'file-count-limit',
+        path: relPrefix === '' ? entry.name : `${relPrefix}/${entry.name}`,
+        limit: OVERLAY_MAX_FILES,
+      });
       break;
     }
     const abs = path.join(absDir, entry.name);
@@ -56,37 +78,47 @@ function collectDir(
     const relPosix = toPosixRel(rel);
 
     if (entry.isDirectory()) {
+      if (depth >= OVERLAY_MAX_DEPTH) {
+        addFirstReason(incompleteReasons, {
+          code: 'depth-limit',
+          path: relPosix,
+          limit: OVERLAY_MAX_DEPTH,
+        });
+        continue;
+      }
       const sub = collectDir(abs, relPosix, files, depth + 1);
-      if (sub.truncated) truncated = true;
+      mergeReasons(incompleteReasons, sub.incompleteReasons);
     } else if (entry.isFile()) {
       if (isHarnessRelPath(relPosix)) {
         files.set(relPosix, abs);
       }
     }
   }
-  return { truncated };
+  return { incompleteReasons };
 }
 
 /** Map flat files in a directory to a repo-relative prefix (e.g. Cline global rules). */
-function collectShallowDir(
-  absDir: string,
-  relPrefix: string,
-  files: Map<string, string>,
-): { truncated: boolean } {
-  let truncated = false;
+function collectShallowDir(absDir: string, relPrefix: string, files: Map<string, string>): CollectionResult {
+  const incompleteReasons: ScanIncompleteReason[] = [];
   const stat = safeStat(absDir);
-  if (!stat?.isDirectory()) return { truncated };
+  if (!stat?.isDirectory()) return { incompleteReasons };
 
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(absDir, { withFileTypes: true });
   } catch {
-    return { truncated };
+    addFirstReason(incompleteReasons, { code: 'unreadable-directory', path: relPrefix });
+    return { incompleteReasons };
   }
+  entries.sort((a, b) => compareLexically(a.name, b.name));
 
   for (const entry of entries) {
     if (files.size >= OVERLAY_MAX_FILES) {
-      truncated = true;
+      addFirstReason(incompleteReasons, {
+        code: 'file-count-limit',
+        path: `${relPrefix}/${entry.name}`,
+        limit: OVERLAY_MAX_FILES,
+      });
       break;
     }
     if (!entry.isFile()) continue;
@@ -95,7 +127,7 @@ function collectShallowDir(
       files.set(relPosix, path.join(absDir, entry.name));
     }
   }
-  return { truncated };
+  return { incompleteReasons };
 }
 
 function collectFile(absFile: string, relPath: string, files: Map<string, string>): void {
@@ -187,15 +219,18 @@ function clineGlobalRulesDirs(home: string): string[] {
 }
 
 /** Walk an extra root and collect harness-shaped relative paths. */
-function collectExtraRoot(absRoot: string, files: Map<string, string>): { truncated: boolean } {
-  let truncated = false;
+function collectExtraRoot(absRoot: string, files: Map<string, string>): CollectionResult {
+  const incompleteReasons: ScanIncompleteReason[] = [];
   const stat = safeStat(absRoot);
-  if (!stat) return { truncated };
+  if (!stat) {
+    addFirstReason(incompleteReasons, { code: 'unreadable-directory', path: '.' });
+    return { incompleteReasons };
+  }
 
   if (stat.isFile()) {
     const rel = toPosixRel(path.basename(absRoot));
     if (isHarnessRelPath(rel)) files.set(rel, absRoot);
-    return { truncated };
+    return { incompleteReasons };
   }
 
   if (stat.isDirectory()) {
@@ -203,29 +238,44 @@ function collectExtraRoot(absRoot: string, files: Map<string, string>): { trunca
     try {
       entries = fs.readdirSync(absRoot, { withFileTypes: true });
     } catch {
-      return { truncated };
+      addFirstReason(incompleteReasons, { code: 'unreadable-directory', path: '.' });
+      return { incompleteReasons };
     }
+    entries.sort((a, b) => compareLexically(a.name, b.name));
     for (const entry of entries) {
       if (files.size >= OVERLAY_MAX_FILES) {
-        truncated = true;
+        addFirstReason(incompleteReasons, {
+          code: 'file-count-limit',
+          path: entry.name,
+          limit: OVERLAY_MAX_FILES,
+        });
         break;
       }
       const abs = path.join(absRoot, entry.name);
       const relPosix = toPosixRel(entry.name);
       if (entry.isDirectory()) {
         const sub = collectDir(abs, relPosix, files, 1);
-        if (sub.truncated) truncated = true;
+        mergeReasons(incompleteReasons, sub.incompleteReasons);
       } else if (entry.isFile() && isHarnessRelPath(relPosix)) {
         files.set(relPosix, abs);
       }
     }
   }
-  return { truncated };
+  return { incompleteReasons };
 }
 
-function overlayFromMap(label: string, files: Map<string, string>, truncated: boolean): ScanOverlay | null {
-  if (files.size === 0) return null;
-  return { label, files, truncated };
+function overlayFromMap(
+  label: string,
+  files: Map<string, string>,
+  incompleteReasons: ScanIncompleteReason[],
+): ScanOverlay | null {
+  if (files.size === 0 && incompleteReasons.length === 0) return null;
+  return {
+    label,
+    files,
+    truncated: incompleteReasons.length > 0,
+    incompleteReasons,
+  };
 }
 
 /** User-level harness locations (OS-aware, allowlisted only). */
@@ -233,23 +283,23 @@ export function buildUserOverlay(): ScanOverlay | null {
   const home = userHome();
   const xdg = xdgConfigHome();
   const files = new Map<string, string>();
-  let truncated = false;
+  const incompleteReasons: ScanIncompleteReason[] = [];
 
   for (const [absDir, relPrefix] of userHarnessDirs(home, xdg)) {
     const result = collectDir(absDir, relPrefix, files);
-    if (result.truncated) truncated = true;
+    mergeReasons(incompleteReasons, result.incompleteReasons);
   }
 
   for (const dir of clineGlobalRulesDirs(home)) {
     const result = collectShallowDir(dir, '.clinerules', files);
-    if (result.truncated) truncated = true;
+    mergeReasons(incompleteReasons, result.incompleteReasons);
   }
 
   for (const [abs, rel] of userHarnessFileAliases(home)) {
     collectFile(abs, rel, files);
   }
 
-  return overlayFromMap('user', files, truncated);
+  return overlayFromMap('user', files, incompleteReasons);
 }
 
 /** System-level harness locations (minimal v1 — expand when paths are validated). */
@@ -261,8 +311,8 @@ export function buildSystemOverlay(): ScanOverlay | null {
 export function buildExtraRootOverlay(repoRoot: string, entry: ExtraRootEntry): ScanOverlay | null {
   const absRoot = path.resolve(repoRoot, entry.path);
   const files = new Map<string, string>();
-  const { truncated } = collectExtraRoot(absRoot, files);
-  return overlayFromMap(entry.id, files, truncated);
+  const { incompleteReasons } = collectExtraRoot(absRoot, files);
+  return overlayFromMap(entry.id, files, incompleteReasons);
 }
 
 export interface ResolvedOverlayRoots {

@@ -82,9 +82,33 @@ function makeDiff(overrides: Partial<ReportDiff> = {}): ReportDiff {
 }
 
 describe('renderTerminal', () => {
-  test('shows the truncated-scan banner only when report.truncated is true', () => {
-    expect(renderTerminal(makeReport({ truncated: true }))).toContain('Scan stopped early');
-    expect(renderTerminal(makeReport({ truncated: false }))).not.toContain('Scan stopped early');
+  test('renders legacy truncated reports as incomplete without an authoritative level', () => {
+    const incomplete = renderTerminal(makeReport({ truncated: true }));
+    expect(incomplete).toContain('Maturity: unavailable - incomplete scan');
+    expect(incomplete).toContain('maturity: file-count-limit');
+    expect(incomplete).toContain('Provisional dimensions:');
+    expect(incomplete).not.toContain('Maturity: L1');
+    expect(renderTerminal(makeReport({ truncated: false }))).not.toContain('Incomplete scan');
+  });
+
+  test('keeps maturity authoritative when only the requested effective scope is incomplete', () => {
+    const out = renderTerminal(
+      makeReport({
+        truncated: true,
+        scopes: { maturity: ['repo'], effective: ['repo', 'team'] },
+        verdicts: {
+          maturity: { status: 'complete', reasons: [] },
+          effective: {
+            status: 'incomplete',
+            reasons: [{ code: 'depth-limit', path: 'team:deep', limit: 8 }],
+          },
+        },
+      }),
+    );
+    expect(out).toContain('Maturity: L1');
+    expect(out).toContain('Effective: unavailable - incomplete scan');
+    expect(out).toContain('effective: depth-limit at team:deep (limit 8)');
+    expect(out).not.toContain('Provisional dimensions:');
   });
 
   test('shows "fully harnessed" when every check passed', () => {

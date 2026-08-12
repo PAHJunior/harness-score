@@ -58,4 +58,22 @@ describe('computeDiff', () => {
     expect(() => computeDiff(legacyBaseline as typeof current, current)).not.toThrow();
     expect(computeDiff(legacyBaseline as typeof current, current).presetChanged).toBe(false);
   });
+
+  test('rejects incomplete current and legacy baseline reports', () => {
+    const complete = score(path.join(FIXTURES, 'level-4'));
+    const incomplete = {
+      ...complete,
+      truncated: true,
+      verdicts: {
+        maturity: { status: 'incomplete' as const, reasons: [{ code: 'depth-limit' as const }] },
+        effective: { status: 'incomplete' as const, reasons: [{ code: 'depth-limit' as const }] },
+      },
+    };
+    expect(() => computeDiff(complete, incomplete)).toThrow('incomplete maturity reports');
+
+    const { verdicts: _verdicts, ...legacyIncomplete } = incomplete;
+    expect(() => computeDiff(legacyIncomplete as typeof complete, complete)).toThrow(
+      'incomplete maturity reports',
+    );
+  });
 });

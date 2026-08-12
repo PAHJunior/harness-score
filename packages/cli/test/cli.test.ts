@@ -14,6 +14,16 @@ function run(args: string[]) {
   return spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' });
 }
 
+function makeIncompleteRoot(): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hs-incomplete-'));
+  let nested = root;
+  for (let depth = 0; depth < 11; depth += 1) {
+    nested = path.join(nested, `d${depth}`);
+    fs.mkdirSync(nested);
+  }
+  return root;
+}
+
 describe('cli', () => {
   test('--json emits a parseable report', () => {
     const result = run([path.join(FIXTURES, 'level-2'), '--json']);
@@ -42,6 +52,59 @@ describe('cli', () => {
     expect(svg).toContain('Harness Score');
     expect(svg).toContain('L3');
     fs.unlinkSync(badgePath);
+  });
+
+  test('emits diagnostic JSON and exits 2 for an incomplete scan even with --min-level 0', () => {
+    const root = makeIncompleteRoot();
+    try {
+      const result = run([root, '--json', '--quiet', '--min-level', '0']);
+      expect(result.status).toBe(2);
+      const report = JSON.parse(result.stdout);
+      expect(report.verdicts.maturity.status).toBe('incomplete');
+      expect(report.verdicts.maturity.reasons[0]).toMatchObject({
+        code: 'depth-limit',
+        limit: 10,
+      });
+      expect(result.stderr).toContain('no authoritative verdict is available');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('writes an incomplete badge instead of L0-L4 and exits 2', () => {
+    const root = makeIncompleteRoot();
+    const badgePath = path.join(os.tmpdir(), `hs-incomplete-badge-${process.pid}.svg`);
+    try {
+      const result = run([root, '--badge', badgePath, '--quiet']);
+      expect(result.status).toBe(2);
+      const svg = fs.readFileSync(badgePath, 'utf8');
+      expect(svg).toContain('>incomplete<');
+      expect(svg).not.toMatch(/>L[0-4]</);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(badgePath, { force: true });
+    }
+  });
+
+  test('exits 2 when only a requested effective scope is incomplete', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hs-effective-root-'));
+    const shared = makeIncompleteRoot();
+    fs.writeFileSync(
+      path.join(root, '.harness-score.json'),
+      JSON.stringify({ extraRoots: [{ id: 'team', path: shared }], gate: 'maturity' }),
+      'utf8',
+    );
+    try {
+      const result = run([root, '--json', '--quiet', '--min-level', '0']);
+      expect(result.status).toBe(2);
+      const report = JSON.parse(result.stdout);
+      expect(report.verdicts.maturity.status).toBe('complete');
+      expect(report.verdicts.effective.status).toBe('incomplete');
+      expect(result.stderr).toContain('effective scan is incomplete');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(shared, { recursive: true, force: true });
+    }
   });
 
   test('rejects a nonexistent directory', () => {
@@ -92,5 +155,34 @@ describe('cli', () => {
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('does not look like a harness-score report');
     fs.unlinkSync(badPath);
+  });
+
+  test('--diff rejects legacy incomplete baselines', () => {
+    const baselinePath = path.join(os.tmpdir(), `hs-incomplete-baseline-${process.pid}.json`);
+    const baseline = JSON.parse(run([path.join(FIXTURES, 'level-2'), '--json', '--quiet']).stdout);
+    baseline.truncated = true;
+    delete baseline.verdicts;
+    fs.writeFileSync(baselinePath, JSON.stringify(baseline), 'utf8');
+    try {
+      const result = run([path.join(FIXTURES, 'level-4'), '--diff', baselinePath, '--quiet']);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain('baseline maturity report is incomplete');
+    } finally {
+      fs.rmSync(baselinePath, { force: true });
+    }
+  });
+
+  test('--diff rejects an incomplete current scan', () => {
+    const baselinePath = path.join(os.tmpdir(), `hs-complete-baseline-${process.pid}.json`);
+    const root = makeIncompleteRoot();
+    fs.writeFileSync(baselinePath, run([path.join(FIXTURES, 'level-2'), '--json', '--quiet']).stdout, 'utf8');
+    try {
+      const result = run([root, '--diff', baselinePath, '--quiet']);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain('current maturity report is incomplete');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(baselinePath, { force: true });
+    }
   });
 });

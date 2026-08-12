@@ -12,6 +12,8 @@ import type {
   LevelInfo,
   Report,
   ScanContext,
+  ScanIncompleteReason,
+  ScanVerdict,
   ScoreSnapshot,
 } from './types.js';
 import { DIMENSIONS } from './types.js';
@@ -158,6 +160,16 @@ function snapshotsEqual(a: ScoreSnapshot, b: ScoreSnapshot): boolean {
   return true;
 }
 
+function contextReasons(ctx: ScanContext): ScanIncompleteReason[] {
+  if (ctx.incompleteReasons && ctx.incompleteReasons.length > 0) return ctx.incompleteReasons;
+  return ctx.truncated ? [{ code: 'file-count-limit' }] : [];
+}
+
+function contextVerdict(ctx: ScanContext): ScanVerdict {
+  const reasons = contextReasons(ctx);
+  return { status: reasons.length > 0 ? 'incomplete' : 'complete', reasons };
+}
+
 export function buildReportFromContext(
   maturityCtx: ScanContext,
   effectiveCtx: ScanContext,
@@ -165,6 +177,8 @@ export function buildReportFromContext(
   resolvedRoots: Report['resolvedRoots'],
 ): Report {
   const severities = resolveSeverities(config);
+  const maturityVerdict = contextVerdict(maturityCtx);
+  const effectiveVerdict = contextVerdict(effectiveCtx);
   const maturity = buildSnapshot(maturityCtx, severities);
   let effective = maturity;
   if (effectiveCtx !== maturityCtx) {
@@ -181,7 +195,8 @@ export function buildReportFromContext(
   return {
     tool: { name: 'harness-score', version: TOOL_VERSION },
     root: maturityCtx.root,
-    truncated: maturityCtx.truncated || effectiveCtx.truncated,
+    truncated: maturityVerdict.status === 'incomplete' || effectiveVerdict.status === 'incomplete',
+    verdicts: { maturity: maturityVerdict, effective: effectiveVerdict },
     scopes: { maturity: ['repo'], effective: config.effectiveScopes },
     gate: config.gate,
     resolvedRoots: resolvedRoots && resolvedRoots.length > 0 ? resolvedRoots : undefined,

@@ -1,6 +1,7 @@
 import type { ReportDiff } from '../diff.js';
 import { toolDisplayName } from '../harness/registry.js';
 import type { Report } from '../types.js';
+import { formatIncompleteReason, reportScopeIsComplete, reportVerdict } from '../verdict.js';
 
 function signed(n: number): string {
   return n > 0 ? `+${n}` : `${n}`;
@@ -58,18 +59,35 @@ function renderDiffSection(diff: ReportDiff): string[] {
 
 export function renderMarkdown(report: Report, diff?: ReportDiff | null): string {
   const lines: string[] = [];
+  const maturityComplete = reportScopeIsComplete(report, 'maturity');
+  const effectiveComplete = reportScopeIsComplete(report, 'effective');
+  const showEffective =
+    report.scopes.effective.some((scope) => scope !== 'repo') ||
+    effectiveComplete !== maturityComplete ||
+    report.effective.level.index !== report.level.index ||
+    report.effective.score.percent !== report.score.percent;
   lines.push(`# Harness Score Report`);
   lines.push('');
-  lines.push(`**Maturity level:** L${report.level.index} · ${report.level.name}`);
-  lines.push(`**Maturity score:** ${report.score.earned}/${report.score.max} (${report.score.percent}%)`);
+  if (maturityComplete) {
+    lines.push(`**Maturity level:** L${report.level.index} · ${report.level.name}`);
+    lines.push(`**Maturity score:** ${report.score.earned}/${report.score.max} (${report.score.percent}%)`);
+  } else {
+    lines.push('**Maturity:** unavailable - incomplete scan');
+    lines.push(
+      `**Provisional maturity score:** ${report.score.earned}/${report.score.max} (${report.score.percent}%)`,
+    );
+  }
   lines.push(`**Maturity scopes:** ${report.scopes.maturity.join(', ')}`);
-  if (
-    report.effective.level.index !== report.level.index ||
-    report.effective.score.percent !== report.score.percent
-  ) {
+  if (showEffective && effectiveComplete) {
     lines.push(`**Effective level:** L${report.effective.level.index} · ${report.effective.level.name}`);
     lines.push(
       `**Effective score:** ${report.effective.score.earned}/${report.effective.score.max} (${report.effective.score.percent}%)`,
+    );
+    lines.push(`**Effective scopes:** ${report.scopes.effective.join(', ')}`);
+  } else if (showEffective) {
+    lines.push('**Effective:** unavailable - incomplete scan');
+    lines.push(
+      `**Provisional effective score:** ${report.effective.score.earned}/${report.effective.score.max} (${report.effective.score.percent}%)`,
     );
     lines.push(`**Effective scopes:** ${report.scopes.effective.join(', ')}`);
   }
@@ -85,10 +103,27 @@ export function renderMarkdown(report: Report, diff?: ReportDiff | null): string
     lines.push(`**Preset:** ${extendsLabel}${offText}`);
   }
   lines.push('');
+  if (!maturityComplete || (showEffective && !effectiveComplete)) {
+    lines.push('> ⚠ This scan is incomplete. Provisional scores and checks are not authoritative.');
+    lines.push('');
+    lines.push('## Incomplete scan reasons');
+    lines.push('');
+    if (!maturityComplete) {
+      for (const reason of reportVerdict(report, 'maturity').reasons) {
+        lines.push(`- **maturity:** ${formatIncompleteReason(reason)}`);
+      }
+    }
+    if (showEffective && !effectiveComplete) {
+      for (const reason of reportVerdict(report, 'effective').reasons) {
+        lines.push(`- **effective:** ${formatIncompleteReason(reason)}`);
+      }
+    }
+    lines.push('');
+  }
   if (diff) {
     lines.push(...renderDiffSection(diff));
   }
-  lines.push('## Dimensions');
+  lines.push(maturityComplete ? '## Dimensions' : '## Provisional dimensions');
   lines.push('');
   lines.push('| Dimension | Score | % |');
   lines.push('|---|---|---|');
@@ -99,7 +134,7 @@ export function renderMarkdown(report: Report, diff?: ReportDiff | null): string
     lines.push(`| ${dimension.title} | ${cell} |`);
   }
   lines.push('');
-  lines.push('## Checks');
+  lines.push(maturityComplete ? '## Checks' : '## Provisional checks');
   lines.push('');
   lines.push('| | Check | Points | Evidence |');
   lines.push('|---|---|---|---|');
@@ -138,7 +173,7 @@ export function renderMarkdown(report: Report, diff?: ReportDiff | null): string
       lines.push(`- **${check.id}** — ${check.remediation} ([guide](${check.docsUrl}))`);
     }
   }
-  if (report.level.nextLevelGaps.length > 0) {
+  if (maturityComplete && report.level.nextLevelGaps.length > 0) {
     lines.push('');
     lines.push(`**To reach L${report.level.index + 1}:** ${report.level.nextLevelGaps.join('; ')}`);
     if (report.level.capped && report.level.capReason) {

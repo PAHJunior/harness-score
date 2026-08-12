@@ -20,8 +20,10 @@ export interface ScanContext {
   root: string;
   /** All file paths relative to root, POSIX separators, sorted. */
   files: string[];
-  /** True if the scan hit MAX_FILES and stopped before the tree was fully walked. */
+  /** Compatibility alias: true whenever the scan is incomplete for any reason. */
   truncated: boolean;
+  /** Deterministic reasons the filesystem walk could not complete. */
+  incompleteReasons?: ScanIncompleteReason[];
   /** True when the relative path exists as a file. */
   has(relPath: string): boolean;
   /** File content as UTF-8, or null when missing/unreadable. Cached. */
@@ -35,6 +37,21 @@ export interface ScanDiagnostic {
   code: string;
   message: string;
   source?: string;
+}
+
+export type ScanIncompleteReasonCode = 'file-count-limit' | 'depth-limit' | 'unreadable-directory';
+
+export interface ScanIncompleteReason {
+  code: ScanIncompleteReasonCode;
+  path?: string;
+  limit?: number;
+}
+
+export type ScanVerdictStatus = 'complete' | 'incomplete';
+
+export interface ScanVerdict {
+  status: ScanVerdictStatus;
+  reasons: ScanIncompleteReason[];
 }
 
 export interface CheckOutcome {
@@ -119,8 +136,10 @@ export interface PresetInfo {
 export interface Report {
   tool: { name: string; version: string };
   root: string;
-  /** True if the scan hit its file-count cap before fully walking the tree — results may be incomplete. */
+  /** Compatibility alias: true whenever either requested scan scope is incomplete. */
   truncated: boolean;
+  /** Authoritative completeness for repository-only and effective snapshots. */
+  verdicts?: { maturity: ScanVerdict; effective: ScanVerdict };
   /** Scopes included in each score. */
   scopes: { maturity: ['repo']; effective: Array<'repo' | 'user' | 'system' | string> };
   /** Which score `--min-level` and CI gates use. */
