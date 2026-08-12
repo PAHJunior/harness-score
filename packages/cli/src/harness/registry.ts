@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import type { ScanContext } from '../types.js';
+import { compareLexically } from '../util.js';
 
 /** Stable tool identifiers surfaced in scan reports. */
 export type ToolId =
@@ -79,7 +80,7 @@ export function matchPathSpec(ctx: ScanContext, spec: PathSpec): PathSpecMatch[]
     }
   }
 
-  return [...matches.values()].sort((a, b) => a.path.localeCompare(b.path));
+  return [...matches.values()].sort((a, b) => compareLexically(a.path, b.path));
 }
 
 /** Root context files checked by CTX-01/02. Order is preference for evidence only. */

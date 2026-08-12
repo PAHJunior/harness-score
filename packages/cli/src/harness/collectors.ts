@@ -1,4 +1,5 @@
 import type { ScanContext } from '../types.js';
+import { compareLexically } from '../util.js';
 import {
   CONTEXT_ROOT_FILES,
   type HarnessKind,
@@ -25,7 +26,7 @@ function collectByKind(ctx: ScanContext, kind: HarnessKind): HarnessArtifact[] {
       out.push({ ...match, toolId: spec.toolId, kind });
     }
   }
-  return out.sort((a, b) => a.path.localeCompare(b.path));
+  return out.sort((a, b) => compareLexically(a.path, b.path));
 }
 
 export function collectRules(ctx: ScanContext): HarnessArtifact[] {

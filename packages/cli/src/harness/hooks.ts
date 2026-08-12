@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import type { ScanContext, ScanDiagnostic } from '../types.js';
-import { safeJsonParse } from '../util.js';
+import { compareLexically, safeJsonParse } from '../util.js';
 import { collectHookConfigs, type HarnessArtifact } from './collectors.js';
 
 /** Events documented at cursor.com/docs - kept permissive on purpose. */
@@ -335,7 +335,7 @@ export function readNormalizedHooks(ctx: ScanContext): NormalizedHooks | null {
     (a, b) =>
       a.nativeDepth - b.nativeDepth ||
       b.events.length - a.events.length ||
-      a.canonicalSource.localeCompare(b.canonicalSource),
+      compareLexically(a.canonicalSource, b.canonicalSource),
   );
   const best = pool[0]!;
   for (const candidate of candidates) {
@@ -356,7 +356,7 @@ export function readNormalizedHooks(ctx: ScanContext): NormalizedHooks | null {
     });
   }
   selectionWarnings.sort(
-    (a, b) => (a.source ?? '').localeCompare(b.source ?? '') || a.code.localeCompare(b.code),
+    (a, b) => compareLexically(a.source ?? '', b.source ?? '') || compareLexically(a.code, b.code),
   );
   return { ...best, selectionWarnings };
 }
