@@ -19,6 +19,44 @@ afterEach(() => {
   }
 });
 
+describe('createScanContext — production limits', () => {
+  test('includes files beyond ten directory levels without truncating the scan', () => {
+    const root = mkTmpDir();
+    const segments = Array.from({ length: 12 }, (_, index) => `level-${index + 1}`);
+    const deepDirectory = path.join(root, ...segments);
+    fs.mkdirSync(deepDirectory, { recursive: true });
+    fs.writeFileSync(path.join(deepDirectory, 'AGENTS.md'), '# deep harness signal');
+
+    const ctx = createScanContext(root);
+    const deepFile = `${segments.join('/')}/AGENTS.md`;
+
+    expect(ctx.has(deepFile)).toBe(true);
+    expect(ctx.read(deepFile)).toBe('# deep harness signal');
+    expect(ctx.truncated).toBe(false);
+    expect(ctx.incompleteReasons).toEqual([]);
+  });
+
+  test('scans a 25,000-file repository past the former 20,000-file limit', () => {
+    const fileCount = 25_000;
+    const virtualFiles = Array.from({ length: fileCount }, (_, index) => {
+      const name = `file-${index.toString().padStart(5, '0')}.txt`;
+      return {
+        name,
+        isDirectory: () => false,
+        isFile: () => true,
+        isSymbolicLink: () => false,
+      } as fs.Dirent;
+    });
+
+    const result = walkDirectory('virtual-root', { readDirectory: () => virtualFiles });
+
+    expect(result.files).toHaveLength(fileCount);
+    expect(result.files.at(-1)).toBe('file-24999.txt');
+    expect(result.truncated).toBe(false);
+    expect(result.incompleteReasons).toEqual([]);
+  });
+});
+
 describe('createScanContext — symlinks', () => {
   test('follows a symlinked directory into a sibling', () => {
     const root = mkTmpDir();

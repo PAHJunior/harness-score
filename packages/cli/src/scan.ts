@@ -38,8 +38,8 @@ const SKIP_DIRS = new Set([
  */
 const SKIP_RELATIVE_PATHS = new Set(['.yarn/cache', '.yarn/unplugged', '.yarn/install-state.gz']);
 
-const MAX_DEPTH = 10;
-const MAX_FILES = 20000;
+/** Emergency fuse against pathological repositories; normal scans should complete well below it. */
+const MAX_FILES = 1_000_000;
 /** Never read file bodies larger than this (binary/artifact protection). */
 const MAX_READ_BYTES = 512 * 1024;
 
@@ -79,9 +79,9 @@ function addFirstReason(reasons: ScanIncompleteReason[], reason: ScanIncompleteR
   if (!reasons.some((existing) => existing.code === reason.code)) reasons.push(reason);
 }
 
-/** Internal/testable deterministic filesystem walker. Production callers use fixed limits. */
+/** Internal/testable deterministic filesystem walker. `maxDepth` is a test seam only. */
 export function walkDirectory(root: string, options: WalkOptions = {}): WalkResult {
-  const maxDepth = options.maxDepth ?? MAX_DEPTH;
+  const maxDepth = options.maxDepth;
   const maxFiles = options.maxFiles ?? MAX_FILES;
   const readDirectory =
     options.readDirectory ?? ((directory: string) => fs.readdirSync(directory, { withFileTypes: true }));
@@ -125,7 +125,7 @@ export function walkDirectory(root: string, options: WalkOptions = {}): WalkResu
 
       if (isDir) {
         if (SKIP_DIRS.has(entry.name)) continue;
-        if (dir.depth >= maxDepth) {
+        if (maxDepth !== undefined && dir.depth >= maxDepth) {
           addFirstReason(incompleteReasons, { code: 'depth-limit', path: rel, limit: maxDepth });
           continue;
         }
