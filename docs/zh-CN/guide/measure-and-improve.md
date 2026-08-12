@@ -491,16 +491,30 @@ description ≥40 字符。
 
 ### Hooks & Guardrails (14 pts)
 
-#### HKS-01 · Hooks configuration present and valid — 4 pts {#hks-01}
-`.cursor/hooks.json` 或 `.claude/settings.json`（`hooks` 键）存在且可解析为 JSON。
+Harness 工件既可从仓库根目录按规范路径识别，也可在工具目录本身作为扫描根目录时识别。
+例如，扫描 `.claude` 时，物理路径 `settings.json`、`hooks/`、`skills/` 和 `agents/`
+会被识别为对应的 `.claude/...` 路径。其他名称的通用根目录不会应用此规则。证据始终使用
+实际读取的物理路径。
+
+#### HKS-01 · Hooks configuration present and valid JSON — 4 pts {#hks-01}
+`.cursor/hooks.json` 或 `.claude/settings.json`（`hooks` 键）存在、可解析为 JSON，且包含
+hooks 对象。当存在多个配置时，优先选择有效且非空的配置；再依次按原生根目录深度、事件数量
+和路径字典序进行确定性选择。
 **修复：** 创建 hooks 配置，并按
 [第 5 章](./guardrails-and-safety#gate-hooks) 的方案逐步扩展。
 
-#### HKS-02 · Known events, version declared — 2 pts {#hks-02}
-存在 version/元数据；每个注册事件在对应工具中有文档
-（Cursor 生命周期事件，或 Claude Code 的 `PreToolUse`/`PostToolUse`）。
-**修复：** 拼错的事件名会静默失败 — 对照
-[第 2 章](./cursor-harness-surface#hooks-observe-and-control-the-agent-loop) 的事件列表检查。
+#### HKS-02 · Hook events and handlers are structurally valid — 2 pts {#hks-02}
+事件映射非空，每个事件都包含有效 handler，并且包含供应商要求的元数据，例如 Cursor 的
+`version`。Claude Code handler 可使用 `command`、`http`、`mcp_tool`、`prompt` 或
+`agent`；每种类型都必须提供必填字段。目录包含 Claude Code 文档中的全部 31 个事件：
+`SessionStart`、`Setup`、`InstructionsLoaded`、`UserPromptSubmit`、`UserPromptExpansion`、
+`MessageDisplay`、`PreToolUse`、`PermissionRequest`、`PostToolUse`、`PostToolUseFailure`、
+`PostToolBatch`、`PermissionDenied`、`Notification`、`SubagentStart`、`SubagentStop`、
+`TaskCreated`、`TaskCompleted`、`Stop`、`StopFailure`、`TeammateIdle`、`ConfigChange`、
+`CwdChanged`、`DirectoryAdded`、`FileChanged`、`WorktreeCreate`、`WorktreeRemove`、
+`PreCompact`、`PostCompact`、`SessionEnd`、`Elicitation` 和 `ElicitationResult`。
+**向前兼容：** 未知但结构有效的事件保留分数，并产生 `unknown-hook-event` warning。
+空事件或结构错误的事件仍会失败。
 
 #### HKS-03 · Gate hook guards risky operations — 4 pts {#hks-03}
 已注册 gate hook（Cursor：`beforeShellExecution`、`beforeMCPExecution`、
@@ -513,8 +527,11 @@ Claude Code：`PostToolUse`）。
 **修复：** 编辑时 format-and-lint，让智能体在会话内获得即时反馈。
 
 #### HKS-05 · Hook scripts committed — 2 pts {#hks-05}
-hooks 配置引用的脚本存在于仓库中。
-**修复：** 提交它们；指向缺失脚本的 hook 在除作者机器外的每台机器上都会失效放行（fail open）。
+命令可执行文件、shell 命令或 `args` 条目中出现的每个仓库本地路径都必须解析到已提交文件。
+当 `.claude` 是扫描根目录时，`${CLAUDE_PROJECT_DIR}/.claude/hooks/check.js` 等带项目
+前缀的规范路径也会解析到物理路径 `hooks/check.js`。不执行命令的有效 handler 没有适用的
+本地脚本，因此可以通过。
+**修复：** 提交所有引用的本地脚本；任何一个缺失路径都会使 HKS-05 失败。
 
 ### Sensors & Feedback (20 pts)
 

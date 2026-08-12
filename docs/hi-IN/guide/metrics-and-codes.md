@@ -92,10 +92,10 @@ Stable IDs — remediation से linked [मापन और सुधार](.
 | ID | Pts | Analyzes exactly | Remediation |
 |---|---|---|---|
 | HKS-01 | 4 | Hooks config exists और JSON के रूप में parse होता है | [hks-01](./measure-and-improve#hks-01) |
-| HKS-02 | 2 | Hooks version/metadata और known event names declare करते हैं | [hks-02](./measure-and-improve#hks-02) |
+| HKS-02 | 2 | Events और typed handlers structurally valid हैं; unknown valid event warning देता है | [hks-02](./measure-and-improve#hks-02) |
 | HKS-03 | 4 | Gate-class hook registered (shell/MCP/read/tool gate) | [hks-03](./measure-and-improve#hks-03) |
 | HKS-04 | 2 | Feedback-class hook registered (post-edit/tool) | [hks-04](./measure-and-improve#hks-04) |
-| HKS-05 | 2 | Config में referenced हर hook script path repo में exists | [hks-05](./measure-and-improve#hks-05) |
+| HKS-05 | 2 | Executables और args का हर local path exists; non-command handlers N/A हैं | [hks-05](./measure-and-improve#hks-05) |
 
 ### Sensors & Feedback
 
@@ -219,5 +219,6 @@ Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effect
 | `level.capped`, `level.capReason` | जब अगले level की कोई blocking requirement वर्तमान config में कभी पूरी नहीं हो सकती (जैसे उसकी dimension preset से excluded), तो `capped` `true` होता है; `capReason` वजह बताता है |
 | `dimensions[].applicable` | `false` सिर्फ तब जब उस dimension का हर check `"off"` resolve हुआ हो |
 | `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — इस scan ने उस check के लिए जो resolved severity use की |
+| `checks[].warnings` | Optional non-fatal diagnostics `{ code, message, source? }`; terminal और Markdown इन्हें points बदले बिना दिखाते हैं |
 
 `--diff` default में **maturity** fields compare करता है (top-level `level` / `score` / `checks`)।

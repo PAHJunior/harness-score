@@ -87,10 +87,10 @@
 | ID | 分 | 精确分析 | 修复 |
 |---|---|---|---|
 | HKS-01 | 4 | Hooks 配置存在且可解析为 JSON | [hks-01](./measure-and-improve#hks-01) |
-| HKS-02 | 2 | Hooks 声明 version/metadata 与已知 event 名称 | [hks-02](./measure-and-improve#hks-02) |
+| HKS-02 | 2 | Event 与 typed handler 结构有效；未知但有效的 event 产生 warning | [hks-02](./measure-and-improve#hks-02) |
 | HKS-03 | 4 | 注册了 gate 类 hook（shell/MCP/read/tool gate） | [hks-03](./measure-and-improve#hks-03) |
 | HKS-04 | 2 | 注册了 feedback 类 hook（post-edit/tool） | [hks-04](./measure-and-improve#hks-04) |
-| HKS-05 | 2 | 配置中引用的每个 hook 脚本路径在 repo 中存在 | [hks-05](./measure-and-improve#hks-05) |
+| HKS-05 | 2 | Executable 与 args 中的每个本地路径都存在；非 command handler 不适用 | [hks-05](./measure-and-improve#hks-05) |
 
 ### Sensors & Feedback
 
@@ -213,6 +213,7 @@ Outputs：`level`、`level-name`、`percent`（maturity）；`effective-level`�
 | `level.capped`、`level.capReason` | 当下一 level 的某个 blocking requirement 在当前配置下永远无法满足时（例如其 dimension 被 preset 排除），`capped` 为 `true`；`capReason` 说明原因 |
 | `dimensions[].applicable` | 仅当该 dimension 中所有 check 都解析为 `"off"` 时为 `false` |
 | `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — 本次 scan 对该 check 使用的最终 severity |
+| `checks[].warnings` | 可选的非致命诊断 `{ code, message, source? }`；terminal 与 Markdown 会显示它们，但不改变分数 |
 | `effective` | 相同结构：`{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | **repo** 中看到的工具（仅供参考） |
 | `truncated` | 遍历达到文件上限 |

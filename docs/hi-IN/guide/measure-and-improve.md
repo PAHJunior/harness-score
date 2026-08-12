@@ -500,16 +500,31 @@ to deploy or release; covers tagging, pipeline, rollback, smoke tests.»
 
 ### Hooks & Guardrails (14 pts)
 
-#### HKS-01 · Hooks configuration present and valid — 4 pts {#hks-01}
-`.cursor/hooks.json` या `.claude/settings.json` (`hooks` key) मौजूद है और JSON के रूप में parse होता है।
+Harness artifacts repository root से canonical path द्वारा और tool directory के स्वयं scan root
+होने पर भी पहचाने जाते हैं। उदाहरण के लिए, `.claude` को scan करने पर physical paths
+`settings.json`, `hooks/`, `skills/`, और `agents/` को उनके `.claude/...` equivalents के रूप में
+पहचाना जाता है। किसी अन्य नाम वाली generic root पर यह नियम लागू नहीं होता। Evidence हमेशा पढ़े गए
+physical path का उपयोग करता है।
+
+#### HKS-01 · Hooks configuration present and valid JSON — 4 pts {#hks-01}
+`.cursor/hooks.json` या `.claude/settings.json` (`hooks` key) मौजूद है, JSON के रूप में parse होता
+है, और hooks object रखता है। कई configs होने पर valid non-empty config जीतता है; native-root depth,
+event count, और lexical path deterministic tie-breakers हैं।
 **सुधार:** hooks config बनाएँ और
 [अध्याय 5](./guardrails-and-safety#gate-hooks) की recipes से बढ़ाएँ।
 
-#### HKS-02 · Known events, version declared — 2 pts {#hks-02}
-Version/metadata मौजूद; हर registered event आपके टूल के लिए documented
-(Cursor lifecycle events, या Claude Code `PreToolUse`/`PostToolUse`)।
-**सुधार:** typo वाले event names silently fail —
-[अध्याय 2](./cursor-harness-surface#hooks-observe-and-control-the-agent-loop) की event list से जाँचें।
+#### HKS-02 · Hook events and handlers are structurally valid — 2 pts {#hks-02}
+Event map non-empty है, हर event में valid handlers हैं, और Cursor के `version` जैसे required vendor
+metadata मौजूद हैं। Claude Code handlers `command`, `http`, `mcp_tool`, `prompt`, या `agent` हो
+सकते हैं; हर type में उसके required fields होने चाहिए। Catalog में सभी 31 documented Claude Code
+events शामिल हैं: `SessionStart`, `Setup`, `InstructionsLoaded`, `UserPromptSubmit`,
+`UserPromptExpansion`, `MessageDisplay`, `PreToolUse`, `PermissionRequest`, `PostToolUse`,
+`PostToolUseFailure`, `PostToolBatch`, `PermissionDenied`, `Notification`, `SubagentStart`,
+`SubagentStop`, `TaskCreated`, `TaskCompleted`, `Stop`, `StopFailure`, `TeammateIdle`,
+`ConfigChange`, `CwdChanged`, `DirectoryAdded`, `FileChanged`, `WorktreeCreate`, `WorktreeRemove`,
+`PreCompact`, `PostCompact`, `SessionEnd`, `Elicitation`, और `ElicitationResult`।
+**Forward compatibility:** कोई unknown लेकिन structurally valid event points बनाए रखता है और
+`unknown-hook-event` warning देता है। Empty या malformed events अभी भी fail होते हैं।
 
 #### HKS-03 · Gate hook guards risky operations — 4 pts {#hks-03}
 gate hook registered (Cursor: `beforeShellExecution`, `beforeMCPExecution`,
@@ -523,9 +538,12 @@ Claude Code: `PostToolUse`)।
 **सुधार:** edit पर format-and-lint एजेंट को session के अंदर instant feedback देता है।
 
 #### HKS-05 · Hook scripts committed — 2 pts {#hks-05}
-hooks config द्वारा reference किए गए scripts रिपॉ में मौजूद हैं।
-**सुधार:** उन्हें commit करें; missing script की ओर point करने वाला hook author की
-machine के अलावा हर machine पर खुला विफल होता है।
+Command executable, shell command, या `args` entry में मिलने वाला हर repository-local path committed
+file पर resolve होता है। `.claude` के scan root होने पर
+`${CLAUDE_PROJECT_DIR}/.claude/hooks/check.js` जैसा project-prefixed canonical path physical
+`hooks/check.js` पर भी resolve होता है। Valid non-command handlers के लिए कोई applicable local
+script नहीं होता, इसलिए वे pass होते हैं।
+**सुधार:** हर referenced local script commit करें; एक missing path भी HKS-05 को fail करता है।
 
 ### Sensors & Feedback (20 pts)
 

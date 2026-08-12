@@ -102,6 +102,28 @@ describe('renderMarkdown', () => {
     expect(out).not.toContain('found a | in the value');
   });
 
+  test('renders additive check warnings with code and source', () => {
+    const out = renderMarkdown(
+      makeReport({
+        checks: [
+          makeCheck({
+            passed: true,
+            warnings: [
+              {
+                code: 'unknown-hook-event',
+                message: 'FutureEvent is not cataloged.',
+                source: '.claude/settings.json',
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(out).toContain('## Warnings');
+    expect(out).toContain('unknown-hook-event');
+    expect(out).toContain('`.claude/settings.json`');
+  });
+
   test('shows the recommended-improvements section only when a check fails', () => {
     const withFailure = renderMarkdown(makeReport({ checks: [makeCheck({ passed: false })] }));
     expect(withFailure).toContain('## Recommended improvements');

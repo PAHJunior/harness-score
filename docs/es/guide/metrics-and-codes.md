@@ -92,10 +92,10 @@ IDs estables — vinculados a remediación en [Medir y mejorar](./measure-and-im
 | ID | Pts | Analiza exactamente | Remediación |
 |---|---|---|---|
 | HKS-01 | 4 | La config de hooks existe y parsea como JSON | [hks-01](./measure-and-improve#hks-01) |
-| HKS-02 | 2 | Los hooks declaran version/metadata y nombres de evento conocidos | [hks-02](./measure-and-improve#hks-02) |
+| HKS-02 | 2 | Eventos y handlers tipados son estructuralmente válidos; un evento válido desconocido avisa | [hks-02](./measure-and-improve#hks-02) |
 | HKS-03 | 4 | Hook clase gate registrado (shell/MCP/read/tool gate) | [hks-03](./measure-and-improve#hks-03) |
 | HKS-04 | 2 | Hook clase feedback registrado (post-edit/tool) | [hks-04](./measure-and-improve#hks-04) |
-| HKS-05 | 2 | Toda ruta de script de hook referenciada en config existe en el repo | [hks-05](./measure-and-improve#hks-05) |
+| HKS-05 | 2 | Toda ruta local en ejecutables y args existe; handlers sin comando no aplican | [hks-05](./measure-and-improve#hks-05) |
 
 ### Sensors & Feedback
 
@@ -219,5 +219,6 @@ Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effect
 | `level.capped`, `level.capReason` | `capped` es `true` cuando un requisito bloqueante del siguiente nivel nunca puede cumplirse bajo la config actual (ej.: dimensión excluida por preset); `capReason` explica el motivo |
 | `dimensions[].applicable` | `false` solo cuando todo check de esa dimensión resolvió a `"off"` |
 | `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — la severidad resuelta que este scan usó para ese check |
+| `checks[].warnings` | Diagnósticos opcionales y no fatales `{ code, message, source? }`; terminal y Markdown los muestran sin cambiar puntos |
 
 `--diff` compara campos de **maturity** por defecto (top-level `level` / `score` / `checks`).

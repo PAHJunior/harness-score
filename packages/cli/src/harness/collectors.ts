@@ -1,8 +1,16 @@
 import type { ScanContext } from '../types.js';
-import { CONTEXT_ROOT_FILES, type HarnessKind, specsForKind, type ToolId } from './registry.js';
+import {
+  CONTEXT_ROOT_FILES,
+  type HarnessKind,
+  matchPathSpec,
+  specsForKind,
+  type ToolId,
+} from './registry.js';
 
 export interface HarnessArtifact {
   path: string;
+  canonicalPath: string;
+  nativeDepth: number;
   toolId: ToolId;
   kind: HarnessKind;
 }
@@ -11,10 +19,10 @@ function collectByKind(ctx: ScanContext, kind: HarnessKind): HarnessArtifact[] {
   const seen = new Set<string>();
   const out: HarnessArtifact[] = [];
   for (const spec of specsForKind(kind)) {
-    for (const path of ctx.matching(spec.pathRegex)) {
-      if (seen.has(path)) continue;
-      seen.add(path);
-      out.push({ path, toolId: spec.toolId, kind });
+    for (const match of matchPathSpec(ctx, spec)) {
+      if (seen.has(match.path)) continue;
+      seen.add(match.path);
+      out.push({ ...match, toolId: spec.toolId, kind });
     }
   }
   return out.sort((a, b) => a.path.localeCompare(b.path));
@@ -58,7 +66,7 @@ export function detectHarnesses(ctx: ScanContext): ToolId[] {
   if (ctx.has('CLAUDE.md')) tools.add('claude-code');
   for (const kind of ['rules', 'skills', 'commands', 'subagents', 'hooks', 'mcp'] as HarnessKind[]) {
     for (const spec of specsForKind(kind)) {
-      if (ctx.matching(spec.pathRegex).length > 0) tools.add(spec.toolId);
+      if (matchPathSpec(ctx, spec).length > 0) tools.add(spec.toolId);
     }
   }
   return [...tools].sort();

@@ -533,16 +533,31 @@ alone; without them the subagent is never invoked.
 
 ### Hooks & Guardrails (14 pts)
 
-#### HKS-01 · Hooks configuration present and valid — 4 pts {#hks-01}
-`.cursor/hooks.json` or `.claude/settings.json` (`hooks` key) exists and parses as JSON.
-**Fix:** create hooks config and grow from the
-recipes in [chapter 5](/guide/guardrails-and-safety#gate-hooks).
+Harness artifacts are recognized both from a repository root by their canonical path and when
+the tool directory itself is the scan root. For example, scanning `.claude` recognizes the
+physical `settings.json`, `hooks/`, `skills/`, and `agents/` paths as their `.claude/...`
+equivalents. Generic roots named something else do not receive this treatment. Evidence always
+uses the physical path that was read.
 
-#### HKS-02 · Known events, version declared — 2 pts {#hks-02}
-Version/metadata present; every registered event is documented for your tool
-(Cursor lifecycle events, or Claude Code `PreToolUse`/`PostToolUse`).
-**Fix:** typo'd event names fail silently — check against the event list in
-[chapter 2](/guide/cursor-harness-surface#hooks-observe-and-control-the-agent-loop).
+#### HKS-01 · Hooks configuration present and valid JSON — 4 pts {#hks-01}
+`.cursor/hooks.json` or `.claude/settings.json` (`hooks` key) exists, parses as JSON, and contains
+a hooks object. When several configs exist, a valid non-empty config wins; native-root depth,
+event count, and lexical path provide deterministic tie-breakers.
+**Fix:** create hooks config and grow from the recipes in
+[chapter 5](/guide/guardrails-and-safety#gate-hooks).
+
+#### HKS-02 · Hook events and handlers are structurally valid — 2 pts {#hks-02}
+The event map is non-empty, every event contains valid handlers, and required vendor metadata
+such as Cursor's `version` is present. Claude Code handlers may use `command`, `http`, `mcp_tool`,
+`prompt`, or `agent`; each type must provide its required fields. The catalog includes all 31
+documented Claude Code events: `SessionStart`, `Setup`, `InstructionsLoaded`, `UserPromptSubmit`,
+`UserPromptExpansion`, `MessageDisplay`, `PreToolUse`, `PermissionRequest`, `PostToolUse`,
+`PostToolUseFailure`, `PostToolBatch`, `PermissionDenied`, `Notification`, `SubagentStart`,
+`SubagentStop`, `TaskCreated`, `TaskCompleted`, `Stop`, `StopFailure`, `TeammateIdle`,
+`ConfigChange`, `CwdChanged`, `DirectoryAdded`, `FileChanged`, `WorktreeCreate`, `WorktreeRemove`,
+`PreCompact`, `PostCompact`, `SessionEnd`, `Elicitation`, and `ElicitationResult`.
+**Forward compatibility:** an unknown but structurally valid event keeps its points and emits an
+`unknown-hook-event` warning. Empty or malformed events still fail.
 
 #### HKS-03 · Gate hook guards risky operations — 4 pts {#hks-03}
 A gate hook registered (Cursor: `beforeShellExecution`, `beforeMCPExecution`,
@@ -557,9 +572,11 @@ Claude Code: `PostToolUse`).
 session.
 
 #### HKS-05 · Hook scripts committed — 2 pts {#hks-05}
-Scripts referenced by the hooks config exist in the repository.
-**Fix:** commit them; a hook pointing at a missing script fails open on
-every machine but the author's.
+Every repository-local path in a command executable, shell command, or `args` entry resolves to a
+committed file. Project-prefixed canonical paths such as
+`${CLAUDE_PROJECT_DIR}/.claude/hooks/check.js` also resolve to physical `hooks/check.js` when
+`.claude` is the scan root. Valid non-command handlers pass with no applicable local scripts.
+**Fix:** commit every referenced local script; one missing path fails HKS-05.
 
 ### Sensors & Feedback (20 pts)
 
