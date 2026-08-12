@@ -107,10 +107,23 @@ export function renderTerminal(report: Report, diff?: ReportDiff | null): string
   lines.push('');
   lines.push(bold(`  harness-score v${report.tool.version}`) + dim(`  ${report.root}`));
   lines.push('');
+  if (!maturityComplete) {
+    lines.push(
+      yellow(
+        `  ${WARN} Maturity scan incomplete ${MIDDOT} provisional maturity results are not authoritative.`,
+      ),
+    );
+    lines.push(...renderIncompleteReasons(report, 'maturity'));
+  }
+  if (showEffective && !effectiveComplete) {
+    lines.push(
+      yellow(
+        `  ${WARN} Effective scan incomplete ${MIDDOT} provisional effective results are not authoritative.`,
+      ),
+    );
+    lines.push(...renderIncompleteReasons(report, 'effective'));
+  }
   if (!maturityComplete || (showEffective && !effectiveComplete)) {
-    lines.push(yellow(`  ${WARN} Incomplete scan ${MIDDOT} provisional results are not authoritative.`));
-    if (!maturityComplete) lines.push(...renderIncompleteReasons(report, 'maturity'));
-    if (showEffective && !effectiveComplete) lines.push(...renderIncompleteReasons(report, 'effective'));
     lines.push('');
   }
   if (maturityComplete) {

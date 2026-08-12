@@ -104,7 +104,12 @@ export function renderMarkdown(report: Report, diff?: ReportDiff | null): string
   }
   lines.push('');
   if (!maturityComplete || (showEffective && !effectiveComplete)) {
-    lines.push('> ⚠ This scan is incomplete. Provisional scores and checks are not authoritative.');
+    if (!maturityComplete) {
+      lines.push('> ⚠ Maturity scan is incomplete. Provisional maturity results are not authoritative.');
+    }
+    if (showEffective && !effectiveComplete) {
+      lines.push('> ⚠ Effective scan is incomplete. Provisional effective results are not authoritative.');
+    }
     lines.push('');
     lines.push('## Incomplete scan reasons');
     lines.push('');
