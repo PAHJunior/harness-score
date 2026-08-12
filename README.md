@@ -135,7 +135,7 @@ with a concrete definition of what counts as public API:
 - **The `Report` JSON shape** — everything `--json` emits and the typed
   programmatic API exports — only gains fields in **minor** versions;
   removing or renaming a field is **major**.
-- **CLI flags and exit codes** (`0` pass, `1` gate failure, `2` usage error)
+- **CLI flags and exit codes** (`0` pass, `1` gate failure, `2` usage error or incomplete scan)
   are stable; removals are **major**.
 - **Maturity model evolution** (new checks, point totals, level thresholds)
   ships in **minor** versions — it changes what a repository *scores*, not

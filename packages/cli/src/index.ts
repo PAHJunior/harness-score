@@ -30,6 +30,8 @@ export {
   TOOL_VERSION,
 } from './score.js';
 export type * from './types.js';
+export type { VerdictScope } from './verdict.js';
+export { formatIncompleteReason, reportScopeIsComplete, reportVerdict } from './verdict.js';
 
 import { type CliConfigOverrides, resolveScanConfig } from './config.js';
 import { buildReport } from './score.js';

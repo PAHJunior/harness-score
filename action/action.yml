@@ -9,7 +9,7 @@ branding:
 
 inputs:
   min-level:
-    description: 'Fail the job when the maturity level is below this (0–4). Use 0 to never fail.'
+    description: 'Fail below this maturity level (0–4). Incomplete scans always fail, including at 0.'
     required: false
     default: '0'
   badge:
@@ -27,7 +27,7 @@ inputs:
   version:
     description: 'harness-score npm version or package spec to run.'
     required: false
-    default: '1.5.2'
+    default: '1.5.3'
   comment:
     description: >-
       Post (or update) a sticky pull-request comment showing the harness
@@ -87,13 +87,51 @@ runs:
       run: |
         set -euo pipefail
         ARGS=(--quiet --json)
-        [ -n "$HS_BADGE" ] && ARGS+=(--badge "$HS_BADGE")
-        [ -n "$HS_REPORT" ] && ARGS+=(--md "$HS_REPORT")
         [ -n "$HS_CONFIG" ] && ARGS+=(--config "$HS_CONFIG")
         [ "$HS_INCLUDE_USER_HARNESS" = "true" ] && ARGS+=(--scope user)
         [ "$HS_INCLUDE_SYSTEM_HARNESS" = "true" ] && ARGS+=(--scope system)
         [ -n "$HS_GATE" ] && ARGS+=(--gate "$HS_GATE")
+        set +e
         npx -y "harness-score@$HS_VERSION" . "${ARGS[@]}" > harness-report.json
+        SCAN_STATUS=$?
+        set -e
+        if [ "$SCAN_STATUS" -ne 0 ] && [ "$SCAN_STATUS" -ne 2 ]; then
+          exit "$SCAN_STATUS"
+        fi
+
+        node <<'NODE'
+        const fs = require('fs');
+        const r = JSON.parse(fs.readFileSync('harness-report.json', 'utf8'));
+        const fallback = () => r.truncated
+          ? { status: 'incomplete', reasons: [{ code: 'file-count-limit' }] }
+          : { status: 'complete', reasons: [] };
+        const verdict = (scope) => r.verdicts?.[scope] ?? fallback();
+        const requested = ['maturity'];
+        if (r.scopes.effective.some((scope) => scope !== 'repo')) requested.push('effective');
+        const incomplete = requested.filter((scope) => verdict(scope).status === 'incomplete');
+        if (incomplete.length > 0) {
+          for (const scope of incomplete) {
+            const reasons = verdict(scope).reasons.map((reason) => {
+              const location = reason.path ? ` at ${reason.path}` : '';
+              const limit = reason.limit === undefined ? '' : ` (limit ${reason.limit})`;
+              return `${reason.code}${location}${limit}`;
+            }).join('; ');
+            console.error(`::error::Harness ${scope} scan is incomplete; no authoritative outputs were published: ${reasons}`);
+          }
+          process.exit(2);
+        }
+        NODE
+
+        ARTIFACT_ARGS=(--quiet)
+        [ -n "$HS_BADGE" ] && ARTIFACT_ARGS+=(--badge "$HS_BADGE")
+        [ -n "$HS_REPORT" ] && ARTIFACT_ARGS+=(--md "$HS_REPORT")
+        [ -n "$HS_CONFIG" ] && ARTIFACT_ARGS+=(--config "$HS_CONFIG")
+        [ "$HS_INCLUDE_USER_HARNESS" = "true" ] && ARTIFACT_ARGS+=(--scope user)
+        [ "$HS_INCLUDE_SYSTEM_HARNESS" = "true" ] && ARTIFACT_ARGS+=(--scope system)
+        [ -n "$HS_GATE" ] && ARTIFACT_ARGS+=(--gate "$HS_GATE")
+        if [ -n "$HS_BADGE" ] || [ -n "$HS_REPORT" ]; then
+          npx -y "harness-score@$HS_VERSION" . "${ARTIFACT_ARGS[@]}"
+        fi
 
         LEVEL=$(node -p "JSON.parse(require('fs').readFileSync('harness-report.json','utf8')).level.index")
         NAME=$(node -p "JSON.parse(require('fs').readFileSync('harness-report.json','utf8')).level.name")

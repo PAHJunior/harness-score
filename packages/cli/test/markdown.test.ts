@@ -89,6 +89,36 @@ describe('renderMarkdown', () => {
     expect(out).toContain('❌');
   });
 
+  test('renders explicit incomplete verdicts as provisional and hides the level', () => {
+    const out = renderMarkdown(
+      makeReport({
+        truncated: true,
+        verdicts: {
+          maturity: {
+            status: 'incomplete',
+            reasons: [{ code: 'unreadable-directory', path: 'private' }],
+          },
+          effective: {
+            status: 'incomplete',
+            reasons: [{ code: 'unreadable-directory', path: 'private' }],
+          },
+        },
+      }),
+    );
+    expect(out).toContain('**Maturity:** unavailable - incomplete scan');
+    expect(out).toContain('**Provisional maturity score:**');
+    expect(out).toContain('## Provisional dimensions');
+    expect(out).toContain('## Provisional checks');
+    expect(out).toContain('unreadable-directory at private');
+    expect(out).not.toContain('**Maturity level:** L1');
+  });
+
+  test('uses truncated as the fail-closed fallback for old reports', () => {
+    const out = renderMarkdown(makeReport({ truncated: true }));
+    expect(out).toContain('**Maturity:** unavailable - incomplete scan');
+    expect(out).toContain('file-count-limit');
+  });
+
   test('shows detected harnesses with display names, only when non-empty', () => {
     const detected = renderMarkdown(makeReport({ detectedHarnesses: ['cursor', 'claude-code'] }));
     expect(detected).toContain('**Detected harnesses:** Cursor, Claude Code');

@@ -14,6 +14,7 @@ import { renderMarkdown } from './report/markdown.js';
 import { renderTerminal } from './report/terminal.js';
 import { buildReport, TOOL_VERSION } from './score.js';
 import type { Report } from './types.js';
+import { formatIncompleteReason, reportScopeIsComplete, reportVerdict } from './verdict.js';
 
 const HELP = `harness-score — deterministic harness-maturity scanner for AI-assisted repositories
 
@@ -32,6 +33,8 @@ Options:
   --quiet              Suppress the terminal report
   --version            Print version
   --help               Show this help
+
+Exit codes: 0 complete/pass, 1 complete scan below --min-level, 2 invalid usage or incomplete requested scan.
 
 Configuration file (optional): .harness-score.json in the scan root.
 See the guide: https://paladini.github.io/harness-score/guide/measure-and-improve
@@ -169,6 +172,16 @@ function gatedLevel(report: Report): Report['level'] {
   return report.level;
 }
 
+function requestedVerdictScopes(report: Report): Array<'maturity' | 'effective'> {
+  const scopes: Array<'maturity' | 'effective'> = ['maturity'];
+  if (report.scopes.effective.some((scope) => scope !== 'repo')) scopes.push('effective');
+  return scopes;
+}
+
+function incompleteRequestedScopes(report: Report): Array<'maturity' | 'effective'> {
+  return requestedVerdictScopes(report).filter((scope) => !reportScopeIsComplete(report, scope));
+}
+
 const args = parseArgs(process.argv.slice(2));
 const rootAbs = path.resolve(args.root);
 if (!fs.existsSync(rootAbs) || !fs.statSync(rootAbs).isDirectory()) {
@@ -204,6 +217,12 @@ if (args.diff !== null) {
     );
   }
   baseline = parsed;
+  if (!reportScopeIsComplete(baseline, 'maturity')) {
+    fail('--diff: baseline maturity report is incomplete and cannot be compared.');
+  }
+  if (!reportScopeIsComplete(report, 'maturity')) {
+    fail('--diff: current maturity report is incomplete and cannot be compared.');
+  }
   diff = computeDiff(baseline, report);
 }
 
@@ -227,6 +246,18 @@ if (args.md !== null) {
 if (args.badge !== null) {
   fs.writeFileSync(args.badge, renderBadge(report), 'utf8');
   if (!args.quiet) process.stderr.write(`badge written to ${args.badge}\n`);
+}
+
+const incompleteScopes = incompleteRequestedScopes(report);
+if (incompleteScopes.length > 0) {
+  for (const scope of incompleteScopes) {
+    const reasons = reportVerdict(report, scope).reasons.map(formatIncompleteReason).join('; ');
+    process.stderr.write(
+      `harness-score: ${scope} scan is incomplete; no authoritative verdict is available` +
+        `${reasons ? `: ${reasons}` : '.'}\n`,
+    );
+  }
+  process.exit(2);
 }
 
 if (args.minLevel !== null) {

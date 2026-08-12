@@ -1,5 +1,13 @@
 # harness-score
 
+## 1.5.3
+
+### Patch Changes
+
+- 0007d96: Fail closed when repository or effective-scope filesystem walks are incomplete, with deterministic verdict reasons, diagnostic-only provisional output, and safe CLI, badge, diff, and GitHub Action behavior.
+- 653de57: Recognize supported tool directories as scan roots, select hook configurations deterministically,
+  and validate the current Claude Code event and handler contract with forward-compatible warnings.
+
 ## 1.5.2
 
 ### Patch Changes

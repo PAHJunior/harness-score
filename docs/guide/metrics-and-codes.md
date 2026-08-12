@@ -187,8 +187,8 @@ Excluding an entire dimension has one honest consequence worth knowing up front:
 | `--config <file>` | Load config from a specific path |
 | `--scope user` | Enable user scope (comma-separated: `user`, `system`) |
 | `--gate maturity\|effective` | Score used for `--min-level` |
-| `--min-level <0-4>` | Exit 1 when gated score is below level |
-| `--json` | Full report including `scopes`, `gate`, `effective` |
+| `--min-level <0-4>` | Exit 1 when a complete gated score is below level; incomplete requested scopes always exit 2 |
+| `--json` | Full report including `scopes`, `gate`, `effective`, and `verdicts` |
 
 ## GitHub Action inputs
 
@@ -201,6 +201,7 @@ Excluding an entire dimension has one honest consequence worth knowing up front:
 | `min-level` | `0` | Fail when gated score is below level |
 
 Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effective-percent`.
+If a requested scan scope is incomplete, the Action fails before publishing any of these outputs, a badge, a Markdown report, a job summary, or a PR comment.
 
 ## Report JSON fields (stable)
 
@@ -214,11 +215,15 @@ Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effect
 | `level`, `score`, `dimensions`, `checks` | **Maturity** snapshot |
 | `effective` | Same shape: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | Tools seen in **repo** (informational) |
-| `truncated` | Walk hit file cap |
+| `verdicts.maturity`, `verdicts.effective` | Completeness status and deterministic reasons for each snapshot: `complete` or `incomplete` |
+| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, or `unreadable-directory`, with optional `path` and `limit` |
+| `truncated` | Compatibility alias; `true` when either requested snapshot is incomplete for any reason |
 | `preset` | `{ extends, rules, resolved }` — team customization actually applied; `resolved` lists only checks whose severity differs from the default |
 | `level.capped`, `level.capReason` | `capped` is `true` when a blocking requirement for the next level can never be met under the current config (e.g. its dimension was excluded by a preset); `capReason` explains why |
 | `dimensions[].applicable` | `false` only when every check in that dimension resolved to `"off"` |
 | `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — the resolved severity this scan used for that check |
 | `checks[].warnings` | Optional non-fatal diagnostics `{ code, message, source? }`; terminal and Markdown render them without changing points |
 
-`--diff` compares **maturity** fields by default (top-level `level` / `score` / `checks`).
+`level`, `score`, dimensions, and checks remain present for diagnosis, but are provisional when their verdict is `incomplete`. Terminal and Markdown say the maturity is unavailable, and the badge value is `incomplete`, never L0-L4. Old reports without `verdicts` are treated as complete when `truncated` is `false`, and incomplete when it is `true`.
+
+`--diff` compares **maturity** fields by default (top-level `level` / `score` / `checks`) and rejects an incomplete baseline or current result.

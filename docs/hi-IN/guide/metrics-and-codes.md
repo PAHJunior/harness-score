@@ -187,8 +187,8 @@ Precedence: **CLI flags → Action inputs → config file → defaults**। `ext
 | `--config <file>` | Specific path से config load करें |
 | `--scope user` | User scope enable (comma-separated: `user`, `system`) |
 | `--gate maturity\|effective` | `--min-level` के लिए score |
-| `--min-level <0-4>` | Gated score level से नीचे हो तो exit 1 |
-| `--json` | Full report including `scopes`, `gate`, `effective` |
+| `--min-level <0-4>` | Complete gated score level से नीचे हो तो exit 1; कोई requested scope incomplete हो तो हमेशा exit 2 |
+| `--json` | Full report including `scopes`, `gate`, `effective`, और `verdicts` |
 
 ## GitHub Action इनपुट
 
@@ -201,6 +201,7 @@ Precedence: **CLI flags → Action inputs → config file → defaults**। `ext
 | `min-level` | `0` | Gated score level से नीचे हो तो fail |
 
 Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effective-percent`.
+अगर कोई requested scope incomplete है, तो Action इन outputs, badge, Markdown report, job summary, या PR comment को publish करने से पहले fail होती है।
 
 ## Report JSON फ़ील्ड (स्थिर)
 
@@ -214,11 +215,15 @@ Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effect
 | `level`, `score`, `dimensions`, `checks` | **Maturity** snapshot |
 | `effective` | Same shape: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | **Repo** में देखे गए tools (informational) |
-| `truncated` | Walk file cap hit |
+| `verdicts.maturity`, `verdicts.effective` | हर snapshot का completeness status और deterministic reasons: `complete` या `incomplete` |
+| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, या `unreadable-directory`, optional `path` और `limit` के साथ |
+| `truncated` | Compatibility alias; किसी भी requested snapshot के किसी कारण से incomplete होने पर `true` |
 | `preset` | `{ extends, rules, resolved }` — इस scan में actually apply हुई team customization; `resolved` सिर्फ वे checks list करता है जिनकी severity default से अलग है |
 | `level.capped`, `level.capReason` | जब अगले level की कोई blocking requirement वर्तमान config में कभी पूरी नहीं हो सकती (जैसे उसकी dimension preset से excluded), तो `capped` `true` होता है; `capReason` वजह बताता है |
 | `dimensions[].applicable` | `false` सिर्फ तब जब उस dimension का हर check `"off"` resolve हुआ हो |
 | `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — इस scan ने उस check के लिए जो resolved severity use की |
 | `checks[].warnings` | Optional non-fatal diagnostics `{ code, message, source? }`; terminal और Markdown इन्हें points बदले बिना दिखाते हैं |
 
-`--diff` default में **maturity** fields compare करता है (top-level `level` / `score` / `checks`)।
+`level`, `score`, dimensions, और checks diagnosis के लिए मौजूद रहते हैं, लेकिन संबंधित verdict `incomplete` होने पर provisional हैं। Terminal और Markdown maturity को unavailable दिखाते हैं, और badge value `incomplete` होती है, कभी L0-L4 नहीं। `verdicts` के बिना पुराने reports में `truncated: false` complete और `truncated: true` incomplete माना जाता है।
+
+`--diff` default में **maturity** fields compare करता है (top-level `level` / `score` / `checks`) और incomplete baseline या current result को reject करता है।

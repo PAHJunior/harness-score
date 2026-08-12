@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { ScanContext } from './types.js';
+import type { ScanContext, ScanIncompleteReason } from './types.js';
+import { compareLexically } from './util.js';
 
 /** Directories that never contain harness signal and can be huge. */
 const SKIP_DIRS = new Set([
@@ -47,6 +48,7 @@ export interface ScanOverlay {
   /** Repo-relative path → absolute path for reading (repo wins on conflict). */
   files: Map<string, string>;
   truncated?: boolean;
+  incompleteReasons?: ScanIncompleteReason[];
 }
 
 export interface CreateScanOptions {
@@ -61,21 +63,47 @@ function safeRealpath(p: string): string | null {
   }
 }
 
-function walk(root: string): { files: string[]; truncated: boolean } {
+interface WalkOptions {
+  maxDepth?: number;
+  maxFiles?: number;
+  readDirectory?: (directory: string) => fs.Dirent[];
+}
+
+export interface WalkResult {
+  files: string[];
+  truncated: boolean;
+  incompleteReasons: ScanIncompleteReason[];
+}
+
+function addFirstReason(reasons: ScanIncompleteReason[], reason: ScanIncompleteReason): void {
+  if (!reasons.some((existing) => existing.code === reason.code)) reasons.push(reason);
+}
+
+/** Internal/testable deterministic filesystem walker. Production callers use fixed limits. */
+export function walkDirectory(root: string, options: WalkOptions = {}): WalkResult {
+  const maxDepth = options.maxDepth ?? MAX_DEPTH;
+  const maxFiles = options.maxFiles ?? MAX_FILES;
+  const readDirectory =
+    options.readDirectory ?? ((directory: string) => fs.readdirSync(directory, { withFileTypes: true }));
   const files: string[] = [];
-  let truncated = false;
+  const incompleteReasons: ScanIncompleteReason[] = [];
   const visitedRealDirs = new Set<string>([safeRealpath(root) ?? root]);
   const stack: Array<{ abs: string; rel: string; depth: number }> = [{ abs: root, rel: '', depth: 0 }];
 
-  outer: while (stack.length > 0) {
+  while (stack.length > 0) {
     const dir = stack.pop()!;
-    if (dir.depth > MAX_DEPTH) continue;
     let entries: fs.Dirent[];
     try {
-      entries = fs.readdirSync(dir.abs, { withFileTypes: true });
+      entries = readDirectory(dir.abs);
     } catch {
+      addFirstReason(incompleteReasons, {
+        code: 'unreadable-directory',
+        path: dir.rel || '.',
+      });
       continue;
     }
+    entries.sort((a, b) => compareLexically(a.name, b.name));
+    const childDirs: Array<{ abs: string; rel: string; depth: number }> = [];
     for (const entry of entries) {
       const rel = dir.rel === '' ? entry.name : `${dir.rel}/${entry.name}`;
       if (SKIP_RELATIVE_PATHS.has(rel)) continue;
@@ -97,30 +125,52 @@ function walk(root: string): { files: string[]; truncated: boolean } {
 
       if (isDir) {
         if (SKIP_DIRS.has(entry.name)) continue;
+        if (dir.depth >= maxDepth) {
+          addFirstReason(incompleteReasons, { code: 'depth-limit', path: rel, limit: maxDepth });
+          continue;
+        }
         // Dedup by real path so symlink cycles (and hardlink-style repeats)
         // can't loop forever; readdirSync/statSync below still follow the
         // symlink transparently via its own (non-resolved) `abs` path.
         const real = safeRealpath(abs) ?? abs;
         if (visitedRealDirs.has(real)) continue;
         visitedRealDirs.add(real);
-        stack.push({ abs, rel, depth: dir.depth + 1 });
+        childDirs.push({ abs, rel, depth: dir.depth + 1 });
       } else if (isFile) {
-        if (files.length >= MAX_FILES) {
-          truncated = true;
-          break outer;
+        if (files.length >= maxFiles) {
+          addFirstReason(incompleteReasons, {
+            code: 'file-count-limit',
+            path: rel,
+            limit: maxFiles,
+          });
+          files.sort(compareLexically);
+          return { files, truncated: true, incompleteReasons };
         }
         files.push(rel);
       }
     }
+    for (let i = childDirs.length - 1; i >= 0; i -= 1) stack.push(childDirs[i]!);
   }
-  files.sort();
-  return { files, truncated };
+  files.sort(compareLexically);
+  return { files, truncated: incompleteReasons.length > 0, incompleteReasons };
+}
+
+function normalizeReasons(
+  truncated: boolean,
+  reasons: ScanIncompleteReason[] | undefined,
+): ScanIncompleteReason[] {
+  const normalized: ScanIncompleteReason[] = [];
+  for (const reason of reasons ?? []) addFirstReason(normalized, reason);
+  if (truncated && normalized.length === 0) {
+    normalized.push({ code: 'file-count-limit' });
+  }
+  return normalized;
 }
 
 function buildContext(
   root: string,
   repoFiles: string[],
-  truncated: boolean,
+  incompleteReasons: ScanIncompleteReason[],
   overlayAbsByRel: Map<string, string>,
 ): ScanContext {
   const repoSet = new Set(repoFiles);
@@ -135,7 +185,8 @@ function buildContext(
   return {
     root,
     files,
-    truncated,
+    truncated: incompleteReasons.length > 0,
+    incompleteReasons,
     has(relPath: string): boolean {
       return fileSet.has(relPath);
     },
@@ -174,15 +225,20 @@ function buildContext(
 
 export function createScanContext(rootInput: string, options: CreateScanOptions = {}): ScanContext {
   const root = path.resolve(rootInput);
-  const { files: repoFiles, truncated: repoTruncated } = walk(root);
+  const { files: repoFiles, truncated: repoTruncated, incompleteReasons: repoReasons } = walkDirectory(root);
   const overlays = options.overlays ?? [];
 
   const overlayAbsByRel = new Map<string, string>();
-  let overlayTruncated = false;
+  const effectiveReasons = normalizeReasons(repoTruncated, repoReasons);
   const repoSet = new Set(repoFiles);
 
   for (const overlay of overlays) {
-    if (overlay.truncated) overlayTruncated = true;
+    for (const reason of normalizeReasons(overlay.truncated === true, overlay.incompleteReasons)) {
+      addFirstReason(effectiveReasons, {
+        ...reason,
+        path: reason.path ? `${overlay.label}:${reason.path}` : undefined,
+      });
+    }
     for (const [rel, abs] of overlay.files) {
       if (repoSet.has(rel)) continue;
       overlayAbsByRel.set(rel, abs);
@@ -190,8 +246,8 @@ export function createScanContext(rootInput: string, options: CreateScanOptions 
   }
 
   if (overlays.length === 0) {
-    return buildContext(root, repoFiles, repoTruncated, overlayAbsByRel);
+    return buildContext(root, repoFiles, effectiveReasons, overlayAbsByRel);
   }
 
-  return buildContext(root, repoFiles, repoTruncated || overlayTruncated, overlayAbsByRel);
+  return buildContext(root, repoFiles, effectiveReasons, overlayAbsByRel);
 }

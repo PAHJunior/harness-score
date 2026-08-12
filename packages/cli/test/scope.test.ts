@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
-import { score } from '../src/index.js';
+import { buildReport, score } from '../src/index.js';
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'fixtures');
 
@@ -74,5 +74,42 @@ describe('harness scopes and dual score', () => {
         fs.rmSync(repoDir, { recursive: true, force: true });
       }
     });
+  });
+
+  test('keeps maturity complete when only an effective extra scope is incomplete', () => {
+    const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hs-repo-'));
+    const sharedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hs-shared-'));
+    let nested = sharedDir;
+    for (let depth = 0; depth < 10; depth += 1) {
+      nested = path.join(nested, `d${depth}`);
+      fs.mkdirSync(nested, { recursive: true });
+    }
+    fs.writeFileSync(path.join(nested, 'AGENTS.md'), '# Too deep\n', 'utf8');
+
+    try {
+      const report = buildReport(repoDir, {
+        scopes: { user: false, system: false },
+        extraRoots: [{ id: 'team', path: sharedDir }],
+        gate: 'maturity',
+        effectiveScopes: ['repo', 'team'],
+        extends: [],
+        rules: {},
+      });
+      expect(report.verdicts?.maturity).toEqual({ status: 'complete', reasons: [] });
+      expect(report.verdicts?.effective).toEqual({
+        status: 'incomplete',
+        reasons: [
+          {
+            code: 'depth-limit',
+            path: 'team:d0/d1/d2/d3/d4/d5/d6/d7/d8',
+            limit: 8,
+          },
+        ],
+      });
+      expect(report.truncated).toBe(true);
+    } finally {
+      fs.rmSync(repoDir, { recursive: true, force: true });
+      fs.rmSync(sharedDir, { recursive: true, force: true });
+    }
   });
 });

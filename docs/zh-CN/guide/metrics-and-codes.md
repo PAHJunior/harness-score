@@ -184,8 +184,8 @@
 | `--config <file>` | 从指定路径加载配置 |
 | `--scope user` | 启用 user scope（逗号分隔：`user`、`system`） |
 | `--gate maturity\|effective` | `--min-level` 使用的分数 |
-| `--min-level <0-4>` | gated 分数低于等级时 exit 1 |
-| `--json` | 完整报告，含 `scopes`、`gate`、`effective` |
+| `--min-level <0-4>` | 完整 gated 分数低于等级时 exit 1；任何请求的 scope 不完整时始终 exit 2 |
+| `--json` | 完整报告，含 `scopes`、`gate`、`effective` 与 `verdicts` |
 
 ## GitHub Action 输入
 
@@ -198,6 +198,7 @@
 | `min-level` | `0` | gated 分数低于等级时失败 |
 
 Outputs：`level`、`level-name`、`percent`（maturity）；`effective-level`、`effective-percent`。
+若请求的 scope 不完整，Action 会在发布这些 outputs、badge、Markdown 报告、job summary 或 PR comment 前失败。
 
 ## 报告 JSON 字段（稳定）
 
@@ -216,6 +217,10 @@ Outputs：`level`、`level-name`、`percent`（maturity）；`effective-level`�
 | `checks[].warnings` | 可选的非致命诊断 `{ code, message, source? }`；terminal 与 Markdown 会显示它们，但不改变分数 |
 | `effective` | 相同结构：`{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | **repo** 中看到的工具（仅供参考） |
-| `truncated` | 遍历达到文件上限 |
+| `verdicts.maturity`、`verdicts.effective` | 每个 snapshot 的完整性状态与确定性原因：`complete` 或 `incomplete` |
+| `verdicts.*.reasons[]` | `file-count-limit`、`depth-limit` 或 `unreadable-directory`，可带 `path` 与 `limit` |
+| `truncated` | 兼容别名；任一请求的 snapshot 因任何原因不完整时为 `true` |
 
-`--diff` 默认比较 **maturity** 字段（顶层 `level` / `score` / `checks`）。
+`level`、`score`、dimensions 与 checks 仍会保留用于诊断，但对应 verdict 为 `incomplete` 时仅是 provisional。Terminal 与 Markdown 会显示 maturity unavailable，badge 值为 `incomplete`，绝不显示 L0-L4。旧报告缺少 `verdicts` 时，`truncated: false` 视为完整，`truncated: true` 视为不完整。
+
+`--diff` 默认比较 **maturity** 字段（顶层 `level` / `score` / `checks`），并拒绝不完整的 baseline 或当前结果。

@@ -152,10 +152,38 @@ describe('buildExtraRootOverlay', () => {
     }
   });
 
-  test('returns null for a missing extra root path', () => {
+  test('reports a deterministic depth-limit reason for an incomplete extra root', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hs-extra-'));
+    let nested = dir;
+    for (let depth = 0; depth < 10; depth += 1) {
+      nested = path.join(nested, `d${depth}`);
+      fs.mkdirSync(nested);
+    }
+    fs.writeFileSync(path.join(nested, 'AGENTS.md'), '# Too deep\n', 'utf8');
+
+    try {
+      const overlay = buildExtraRootOverlay(dir, { id: 'deep', path: '.' });
+      expect(overlay?.truncated).toBe(true);
+      expect(overlay?.incompleteReasons).toEqual([
+        {
+          code: 'depth-limit',
+          path: 'd0/d1/d2/d3/d4/d5/d6/d7/d8',
+          limit: 8,
+        },
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('fails closed for a missing configured extra root path', () => {
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'hs-repo-'));
     try {
-      expect(buildExtraRootOverlay(repo, { id: 'missing', path: './definitely-not-here' })).toBeNull();
+      expect(buildExtraRootOverlay(repo, { id: 'missing', path: './definitely-not-here' })).toMatchObject({
+        label: 'missing',
+        truncated: true,
+        incompleteReasons: [{ code: 'unreadable-directory', path: '.' }],
+      });
     } finally {
       fs.rmSync(repo, { recursive: true, force: true });
     }

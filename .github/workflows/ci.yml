@@ -6,7 +6,29 @@ on:
   pull_request:
 
 jobs:
+  compatibility:
+    name: test (${{ matrix.os }}, Node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: 18
+          - os: windows-latest
+            node: 22
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: test
+        run: npm test
+
   checks:
+    name: Full checks (ubuntu-latest, Node 22)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +65,45 @@ jobs:
           test "$HS_PERCENT" = "100"
           test -s "$RUNNER_TEMP/harness-action-fixture/harness-badge.svg"
           test -s "$RUNNER_TEMP/harness-action-fixture/harness-report.md"
+      - name: Prepare incomplete GitHub Action smoke fixture
+        shell: bash
+        run: |
+          ROOT="$RUNNER_TEMP/harness-action-incomplete"
+          mkdir -p "$ROOT"
+          NESTED="$ROOT"
+          for DEPTH in $(seq 0 10); do
+            NESTED="$NESTED/d$DEPTH"
+            mkdir "$NESTED"
+          done
+      - name: Reject incomplete GitHub Action scan
+        id: action-incomplete
+        continue-on-error: true
+        uses: ./
+        with:
+          version: 'file:${{ github.workspace }}/packages/cli'
+          working-directory: ${{ runner.temp }}/harness-action-incomplete
+          min-level: '0'
+          badge: 'incomplete-badge.svg'
+          report: 'incomplete-report.md'
+      - name: Verify incomplete Action publishes no authoritative outputs or artifacts
+        if: ${{ always() }}
+        shell: bash
+        env:
+          HS_OUTCOME: ${{ steps.action-incomplete.outcome }}
+          HS_LEVEL: ${{ steps.action-incomplete.outputs.level }}
+          HS_LEVEL_NAME: ${{ steps.action-incomplete.outputs.level-name }}
+          HS_PERCENT: ${{ steps.action-incomplete.outputs.percent }}
+          HS_EFFECTIVE_LEVEL: ${{ steps.action-incomplete.outputs.effective-level }}
+          HS_EFFECTIVE_PERCENT: ${{ steps.action-incomplete.outputs.effective-percent }}
+        run: |
+          test "$HS_OUTCOME" = "failure"
+          test -z "$HS_LEVEL"
+          test -z "$HS_LEVEL_NAME"
+          test -z "$HS_PERCENT"
+          test -z "$HS_EFFECTIVE_LEVEL"
+          test -z "$HS_EFFECTIVE_PERCENT"
+          test ! -e "$RUNNER_TEMP/harness-action-incomplete/incomplete-badge.svg"
+          test ! -e "$RUNNER_TEMP/harness-action-incomplete/incomplete-report.md"
       - name: Consumer-facing type packaging check (typecheck:consumer)
         run: npm run typecheck:consumer -w harness-score
       - name: Published types match runtime exports (attw)

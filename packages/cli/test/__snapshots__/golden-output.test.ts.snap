@@ -1018,6 +1018,16 @@ exports[`golden output — regression baseline for build/packaging/scan changes 
     "percent": 13,
   },
   "truncated": false,
+  "verdicts": {
+    "effective": {
+      "reasons": [],
+      "status": "complete",
+    },
+    "maturity": {
+      "reasons": [],
+      "status": "complete",
+    },
+  },
 }
 `;
 
@@ -2041,6 +2051,16 @@ exports[`golden output — regression baseline for build/packaging/scan changes 
     "percent": 20,
   },
   "truncated": false,
+  "verdicts": {
+    "effective": {
+      "reasons": [],
+      "status": "complete",
+    },
+    "maturity": {
+      "reasons": [],
+      "status": "complete",
+    },
+  },
 }
 `;
 
@@ -3068,6 +3088,16 @@ exports[`golden output — regression baseline for build/packaging/scan changes 
     "percent": 48,
   },
   "truncated": false,
+  "verdicts": {
+    "effective": {
+      "reasons": [],
+      "status": "complete",
+    },
+    "maturity": {
+      "reasons": [],
+      "status": "complete",
+    },
+  },
 }
 `;
 
@@ -4093,6 +4123,16 @@ exports[`golden output — regression baseline for build/packaging/scan changes 
     "percent": 81,
   },
   "truncated": false,
+  "verdicts": {
+    "effective": {
+      "reasons": [],
+      "status": "complete",
+    },
+    "maturity": {
+      "reasons": [],
+      "status": "complete",
+    },
+  },
 }
 `;
 
@@ -5118,6 +5158,16 @@ exports[`golden output — regression baseline for build/packaging/scan changes 
     "percent": 100,
   },
   "truncated": false,
+  "verdicts": {
+    "effective": {
+      "reasons": [],
+      "status": "complete",
+    },
+    "maturity": {
+      "reasons": [],
+      "status": "complete",
+    },
+  },
 }
 `;
 
@@ -6175,5 +6225,15 @@ exports[`golden output — regression baseline for build/packaging/scan changes 
     "percent": 100,
   },
   "truncated": false,
+  "verdicts": {
+    "effective": {
+      "reasons": [],
+      "status": "complete",
+    },
+    "maturity": {
+      "reasons": [],
+      "status": "complete",
+    },
+  },
 }
 `;

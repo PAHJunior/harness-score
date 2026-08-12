@@ -24,6 +24,8 @@ A per-run summary (level + dimension table) appears in the job summary. To
 publish the badge, upload it as an artifact or commit it to a `badges`
 branch, then reference it from your README:
 
+The Action fails closed when a requested filesystem scan is incomplete (file-count limit, depth limit, or unreadable directory). It exits before publishing level outputs, a badge, a Markdown report, a job summary, or a pull-request comment, even when `min-level` is `0`.
+
 Pin a full commit SHA instead of `v1` for maximum supply-chain stability. The legacy
 `paladini/harness-score/action@<ref>` entrypoint remains compatible, but the
 root entrypoint is recommended because GitHub dependency-review can associate
@@ -79,11 +81,11 @@ concurrency:
 
 | Input | Default | Description |
 |---|---|---|
-| `min-level` | `0` | Fail when maturity is below this level (0–4) |
+| `min-level` | `0` | Fail when maturity is below this level (0–4); incomplete scans always fail |
 | `badge` | `harness-badge.svg` | SVG pill (`harness` + level); empty to skip |
 | `report` | _(empty)_ | Markdown report output path |
 | `working-directory` | `.` | Directory to scan |
-| `version` | `latest` | harness-score npm version |
+| `version` | `1.5.3` | harness-score npm version or package spec |
 | `comment` | `false` | Post/update a sticky PR comment with the score delta (`pull_request` events only; requires `pull-requests: write`) |
 
 ## Outputs

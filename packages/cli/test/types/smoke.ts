@@ -20,6 +20,7 @@ import {
   type DimensionInfo,
   type DimensionScore,
   DOCS_BASE_URL,
+  formatIncompleteReason,
   LEVEL_NAMES,
   LEVEL_REQUIREMENTS,
   type LevelInfo,
@@ -29,9 +30,14 @@ import {
   renderBadge,
   renderMarkdown,
   renderTerminal,
+  reportScopeIsComplete,
+  reportVerdict,
   resolveSeverities,
   type ScanContext,
   type ScanDiagnostic,
+  type ScanIncompleteReason,
+  type ScanVerdict,
+  type ScanVerdictStatus,
   type Severity,
   score,
   TOOL_DISPLAY_NAMES,
@@ -56,6 +62,11 @@ const levelInfo: LevelInfo = scored.level;
 const checkOutcome: CheckOutcome = { passed: true, evidence: 'x' };
 const checkResult: CheckResult = scored.checks[0]!;
 const diagnostic: ScanDiagnostic = { code: 'future-event', message: 'x', source: '.claude/settings.json' };
+const incompleteReason: ScanIncompleteReason = { code: 'depth-limit', path: 'deep', limit: 10 };
+const verdict: ScanVerdict = reportVerdict(scored, 'maturity');
+const verdictStatus: ScanVerdictStatus = verdict.status;
+const complete: boolean = reportScopeIsComplete(scored, 'maturity');
+const formattedReason: string = formatIncompleteReason(incompleteReason);
 const checkDelta: CheckDelta | undefined = diff.checksChanged[0];
 const dimensionDelta: DimensionDelta = diff.dimensions[0]!;
 const toolId: ToolId = 'cursor';
@@ -82,6 +93,11 @@ void [
   checkOutcome,
   checkResult,
   diagnostic,
+  incompleteReason,
+  verdict,
+  verdictStatus,
+  complete,
+  formattedReason,
   checkDelta,
   dimensionDelta,
   toolId,

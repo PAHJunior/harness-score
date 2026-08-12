@@ -60,6 +60,10 @@ for (let i = 0; i < ITERATIONS; i += 1) {
 }
 
 const avg = timings.reduce((a, b) => a + b, 0) / timings.length;
+const sorted = [...timings].sort((a, b) => a - b);
+const midpoint = Math.floor(sorted.length / 2);
+const median = sorted.length % 2 === 0 ? (sorted[midpoint - 1] + sorted[midpoint]) / 2 : sorted[midpoint];
 console.log(`\nAverage over ${ITERATIONS} runs: ${avg.toFixed(1)}ms (${FILE_COUNT} files)`);
+console.log(`Median over ${ITERATIONS} runs: ${median.toFixed(1)}ms (${FILE_COUNT} files)`);
 
 fs.rmSync(root, { recursive: true, force: true });
