@@ -1,5 +1,15 @@
 # harness-score
 
+## 1.6.0
+
+### Minor Changes
+
+- 22767b4: Scan the complete repository tree without a production depth cap, raise the
+  file-count fuse to 1,000,000, and decide incomplete-scan failures from the
+  selected gate while preserving authoritative maturity outputs. Discovered
+  paths that cannot be inspected and symlinks that escape the scan root now also
+  make the affected snapshot incomplete.
+
 ## 1.5.3
 
 ### Patch Changes
