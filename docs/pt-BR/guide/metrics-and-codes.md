@@ -187,7 +187,11 @@ produção. Ela inclui arquivos rastreados, não rastreados e ignorados depois d
 pular diretórios conhecidos de dependências e artefatos gerados.
 `file-count-limit` representa um fusível emergencial de 1.000.000 de arquivos
 para o repositório; overlays limitados de user e extra roots ainda podem
-reportar `depth-limit`.
+reportar `depth-limit`. Um caminho descoberto que não possa ser inspecionado
+quando solicitado por um check reporta `unreadable-path`; conteúdos acima de
+512 KiB, ignorados intencionalmente, não reportam esse motivo. Symlinks internos
+são seguidos e deduplicados, enquanto um alvo fora da raiz reporta
+`outside-root-symlink` e não é percorrido nem lido.
 
 | Flag | Significado |
 |---|---|
@@ -223,8 +227,8 @@ A Action publica outputs, badge e relatório de maturity somente quando maturity
 | `effective` | Mesma forma: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | Ferramentas vistas no **repo** (informativo) |
 | `verdicts.maturity`, `verdicts.effective` | Status de completude e motivos determinísticos de cada snapshot: `complete` ou `incomplete` |
-| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit` ou `unreadable-directory`, com `path` e `limit` opcionais |
-| `truncated` | Alias de compatibilidade; `true` quando qualquer snapshot solicitado está incompleto por qualquer motivo |
+| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, `unreadable-directory`, `unreadable-path` ou `outside-root-symlink`, com `path` e `limit` opcionais |
+| `truncated` | Alias de compatibilidade; `true` quando o snapshot de maturity ou effective está incompleto por qualquer motivo |
 | `preset` | `{ extends, rules, resolved }` — personalização de equipe efetivamente aplicada; `resolved` só lista checks cuja severidade difere do padrão |
 | `level.capped`, `level.capReason` | `capped` é `true` quando um requisito bloqueante do próximo nível nunca pode ser satisfeito sob a config atual (ex.: dimensão excluída por preset); `capReason` explica o motivo |
 | `dimensions[].applicable` | `false` só quando todo check daquela dimensão resolveu para `"off"` |

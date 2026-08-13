@@ -186,7 +186,11 @@ Repository maturity discovery पर production depth cap नहीं है।
 और generated directories को छोड़ने के बाद इसमें tracked, untracked, और ignored
 files शामिल होते हैं। Repository scan में `file-count-limit` emergency
 1,000,000-file fuse को दर्शाता है; bounded user और extra-root overlays अभी भी
-`depth-limit` report कर सकते हैं।
+`depth-limit` report कर सकते हैं। Check के request करने पर inspect न हो पाने वाला
+discovered path `unreadable-path` report करता है; जानबूझकर skip किए गए 512 KiB से
+बड़े bodies यह reason report नहीं करते। Internal symlinks follow और deduplicate
+होते हैं; scan root के बाहर का target `outside-root-symlink` report करता है और
+उसे traverse या read नहीं किया जाता।
 
 | Flag | Meaning |
 |---|---|
@@ -222,8 +226,8 @@ Action maturity complete होने पर ही maturity outputs, badge, औ
 | `effective` | Same shape: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | **Repo** में देखे गए tools (informational) |
 | `verdicts.maturity`, `verdicts.effective` | हर snapshot का completeness status और deterministic reasons: `complete` या `incomplete` |
-| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, या `unreadable-directory`, optional `path` और `limit` के साथ |
-| `truncated` | Compatibility alias; किसी भी requested snapshot के किसी कारण से incomplete होने पर `true` |
+| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, `unreadable-directory`, `unreadable-path`, या `outside-root-symlink`, optional `path` और `limit` के साथ |
+| `truncated` | Compatibility alias; maturity या effective snapshot के किसी कारण से incomplete होने पर `true` |
 | `preset` | `{ extends, rules, resolved }` — इस scan में actually apply हुई team customization; `resolved` सिर्फ वे checks list करता है जिनकी severity default से अलग है |
 | `level.capped`, `level.capReason` | जब अगले level की कोई blocking requirement वर्तमान config में कभी पूरी नहीं हो सकती (जैसे उसकी dimension preset से excluded), तो `capped` `true` होता है; `capReason` वजह बताता है |
 | `dimensions[].applicable` | `false` सिर्फ तब जब उस dimension का हर check `"off"` resolve हुआ हो |

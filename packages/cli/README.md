@@ -17,6 +17,14 @@ The scan reads your filesystem and parses config — that's it. No network
 calls, no telemetry, no model in the loop. Same repo in, same score out,
 every time.
 
+Repository discovery walks the complete relevant filesystem tree without a
+production depth cap, including tracked, untracked, and ignored files. Known
+dependency and generated directories are skipped, followed symlink targets
+must remain inside the scan root, and file bodies above 512 KiB are not read. A
+1,000,000-file emergency fuse protects against pathological trees; reaching it,
+finding an out-of-root symlink, or encountering an unreadable relevant path
+marks the affected snapshot as incomplete instead of authoritative.
+
 Full maturity model, check catalog, and remediation guide:
 **[paladini.github.io/harness-score](https://paladini.github.io/harness-score/)**
 

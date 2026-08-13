@@ -181,7 +181,10 @@
 
 仓库 maturity 发现没有生产环境深度上限。跳过已知依赖和生成目录后，它会包含 tracked、
 untracked 和 ignored 文件。仓库扫描中的 `file-count-limit` 表示 1,000,000 个文件的
-紧急保险丝；有界的 user 和 extra-root overlay 仍可能报告 `depth-limit`。
+紧急保险丝；有界的 user 和 extra-root overlay 仍可能报告 `depth-limit`。如果 check
+请求检查一个已发现但无法读取的路径，则报告 `unreadable-path`；有意跳过的 512 KiB
+以上文件内容不会报告该原因。内部 symlink 会被跟随并去重；指向扫描根目录之外的目标会
+报告 `outside-root-symlink`，且不会被遍历或读取。
 
 | 标志 | 含义 |
 |---|---|
@@ -222,8 +225,8 @@ Action 仅在 maturity 完整时发布 maturity outputs、badge 和报告，仅�
 | `effective` | 相同结构：`{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | **repo** 中看到的工具（仅供参考） |
 | `verdicts.maturity`、`verdicts.effective` | 每个 snapshot 的完整性状态与确定性原因：`complete` 或 `incomplete` |
-| `verdicts.*.reasons[]` | `file-count-limit`、`depth-limit` 或 `unreadable-directory`，可带 `path` 与 `limit` |
-| `truncated` | 兼容别名；任一请求的 snapshot 因任何原因不完整时为 `true` |
+| `verdicts.*.reasons[]` | `file-count-limit`、`depth-limit`、`unreadable-directory`、`unreadable-path` 或 `outside-root-symlink`，可带 `path` 与 `limit` |
+| `truncated` | 兼容别名；maturity 或 effective snapshot 因任何原因不完整时为 `true` |
 
 `level`、`score`、dimensions 与 checks 仍会保留用于诊断，但对应 verdict 为 `incomplete` 时仅是 provisional。Terminal 与 Markdown 会明确指出不可用的 snapshot。Badge 始终表示 maturity；当 maturity 不完整时值为 `incomplete`，绝不显示 L0-L4。旧报告缺少 `verdicts` 时，`truncated: false` 视为完整，`truncated: true` 视为不完整。
 

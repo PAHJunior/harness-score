@@ -127,10 +127,11 @@ deterministic scanner can claim.
 
 The repository scan walks the complete relevant filesystem tree, including
 tracked, untracked, and ignored files. It skips known dependency and generated
-directories, and it never reads file bodies larger than 512 KiB. An emergency
-fuse stops pathological trees above 1,000,000 files; hitting that fuse or an
-unreadable directory marks the affected snapshot as incomplete instead of
-publishing its score as authoritative.
+directories, keeps followed symlink targets inside the scan root, and never
+reads file bodies larger than 512 KiB. An emergency fuse stops pathological
+trees above 1,000,000 files; hitting that fuse, finding an out-of-root symlink,
+or encountering an unreadable relevant path marks the affected snapshot as
+incomplete instead of publishing its score as authoritative.
 
 ## Stability & versioning
 

@@ -186,7 +186,10 @@ Repository maturity discovery has no production depth cap. It includes tracked,
 untracked, and ignored files after skipping known dependency and generated
 directories. `file-count-limit` represents an emergency 1,000,000-file fuse for
 the repository scan; bounded user and extra-root overlays can still report
-`depth-limit`.
+`depth-limit`. A discovered path that cannot be inspected when a check requests
+it reports `unreadable-path`; intentionally skipped bodies above 512 KiB do not.
+Internal symlinks are followed and deduplicated, while a target outside the scan
+root reports `outside-root-symlink` and is not traversed or read.
 
 | Flag | Meaning |
 |---|---|
@@ -222,8 +225,8 @@ The Action publishes maturity outputs, badges, and reports only when maturity is
 | `effective` | Same shape: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | Tools seen in **repo** (informational) |
 | `verdicts.maturity`, `verdicts.effective` | Completeness status and deterministic reasons for each snapshot: `complete` or `incomplete` |
-| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, or `unreadable-directory`, with optional `path` and `limit` |
-| `truncated` | Compatibility alias; `true` when either requested snapshot is incomplete for any reason |
+| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, `unreadable-directory`, `unreadable-path`, or `outside-root-symlink`, with optional `path` and `limit` |
+| `truncated` | Compatibility alias; `true` when the maturity or effective snapshot is incomplete for any reason |
 | `preset` | `{ extends, rules, resolved }` — team customization actually applied; `resolved` lists only checks whose severity differs from the default |
 | `level.capped`, `level.capReason` | `capped` is `true` when a blocking requirement for the next level can never be met under the current config (e.g. its dimension was excluded by a preset); `capReason` explains why |
 | `dimensions[].applicable` | `false` only when every check in that dimension resolved to `"off"` |

@@ -25,7 +25,9 @@ publish the badge, upload it as an artifact or commit it to a `badges`
 branch, then reference it from your README:
 
 The Action fails closed when the snapshot selected by `gate` is incomplete
-(file-count limit, depth limit, or unreadable directory). Complete maturity
+(file-count limit, depth limit, or unreadable relevant path such as an
+`unreadable-path` or `unreadable-directory`, plus out-of-root symlinks).
+Complete maturity
 outputs, badges, and reports remain authoritative when only an additional
 effective scope is incomplete. In that case, `gate: maturity` can pass with a
 warning, while `gate: effective` exits 2. Effective outputs remain empty until
@@ -50,6 +52,10 @@ new one each time.
 
 This is opt-in and requires the calling workflow to grant
 `pull-requests: write` — the action cannot request that permission for you:
+
+When `config` is set, the main scan, base-branch baseline, and current diff all
+use that same explicit configuration. Leave `config` empty to preserve config
+autodiscovery in each scanned tree.
 
 ```yaml
 on:
