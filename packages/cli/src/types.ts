@@ -22,11 +22,11 @@ export interface ScanContext {
   files: string[];
   /** Compatibility alias: true whenever the scan is incomplete for any reason. */
   truncated: boolean;
-  /** Deterministic reasons the filesystem walk could not complete. */
+  /** Deterministic reasons the filesystem walk or a requested file read could not complete. */
   incompleteReasons?: ScanIncompleteReason[];
   /** True when the relative path exists as a file. */
   has(relPath: string): boolean;
-  /** File content as UTF-8, or null when missing/unreadable. Cached. */
+  /** File content as UTF-8, or null when missing/unreadable/over the read limit. Cached. */
   read(relPath: string): string | null;
   /** All files whose relative path matches the regex. */
   matching(re: RegExp): string[];
@@ -39,7 +39,12 @@ export interface ScanDiagnostic {
   source?: string;
 }
 
-export type ScanIncompleteReasonCode = 'file-count-limit' | 'depth-limit' | 'unreadable-directory';
+export type ScanIncompleteReasonCode =
+  | 'file-count-limit'
+  | 'depth-limit'
+  | 'unreadable-directory'
+  | 'unreadable-path'
+  | 'outside-root-symlink';
 
 export interface ScanIncompleteReason {
   code: ScanIncompleteReasonCode;
@@ -136,7 +141,7 @@ export interface PresetInfo {
 export interface Report {
   tool: { name: string; version: string };
   root: string;
-  /** Compatibility alias: true whenever either requested scan scope is incomplete. */
+  /** Compatibility alias: true whenever the maturity or effective snapshot is incomplete. */
   truncated: boolean;
   /** Authoritative completeness for repository-only and effective snapshots. */
   verdicts?: { maturity: ScanVerdict; effective: ScanVerdict };

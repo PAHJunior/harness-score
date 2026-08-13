@@ -182,12 +182,21 @@ Excluding an entire dimension has one honest consequence worth knowing up front:
 
 ## CLI flags (scan configuration)
 
+Repository maturity discovery has no production depth cap. It includes tracked,
+untracked, and ignored files after skipping known dependency and generated
+directories. `file-count-limit` represents an emergency 1,000,000-file fuse for
+the repository scan; bounded user and extra-root overlays can still report
+`depth-limit`. A discovered path that cannot be inspected when a check requests
+it reports `unreadable-path`; intentionally skipped bodies above 512 KiB do not.
+Internal symlinks are followed and deduplicated, while a target outside the scan
+root reports `outside-root-symlink` and is not traversed or read.
+
 | Flag | Meaning |
 |---|---|
 | `--config <file>` | Load config from a specific path |
 | `--scope user` | Enable user scope (comma-separated: `user`, `system`) |
 | `--gate maturity\|effective` | Score used for `--min-level` |
-| `--min-level <0-4>` | Exit 1 when a complete gated score is below level; incomplete requested scopes always exit 2 |
+| `--min-level <0-4>` | Exit 1 when a complete gated score is below level; an incomplete gated snapshot exits 2 |
 | `--json` | Full report including `scopes`, `gate`, `effective`, and `verdicts` |
 
 ## GitHub Action inputs
@@ -201,7 +210,7 @@ Excluding an entire dimension has one honest consequence worth knowing up front:
 | `min-level` | `0` | Fail when gated score is below level |
 
 Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effective-percent`.
-If a requested scan scope is incomplete, the Action fails before publishing any of these outputs, a badge, a Markdown report, a job summary, or a PR comment.
+The Action publishes maturity outputs, badges, and reports only when maturity is complete, and effective outputs only when effective is complete. If only effective is incomplete, `gate: maturity` can pass with a warning; `gate: effective` exits 2. An incomplete maturity snapshot publishes no maturity outputs, badge, report, or PR comment.
 
 ## Report JSON fields (stable)
 
@@ -216,14 +225,14 @@ If a requested scan scope is incomplete, the Action fails before publishing any 
 | `effective` | Same shape: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | Tools seen in **repo** (informational) |
 | `verdicts.maturity`, `verdicts.effective` | Completeness status and deterministic reasons for each snapshot: `complete` or `incomplete` |
-| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, or `unreadable-directory`, with optional `path` and `limit` |
-| `truncated` | Compatibility alias; `true` when either requested snapshot is incomplete for any reason |
+| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, `unreadable-directory`, `unreadable-path`, or `outside-root-symlink`, with optional `path` and `limit` |
+| `truncated` | Compatibility alias; `true` when the maturity or effective snapshot is incomplete for any reason |
 | `preset` | `{ extends, rules, resolved }` — team customization actually applied; `resolved` lists only checks whose severity differs from the default |
 | `level.capped`, `level.capReason` | `capped` is `true` when a blocking requirement for the next level can never be met under the current config (e.g. its dimension was excluded by a preset); `capReason` explains why |
 | `dimensions[].applicable` | `false` only when every check in that dimension resolved to `"off"` |
 | `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — the resolved severity this scan used for that check |
 | `checks[].warnings` | Optional non-fatal diagnostics `{ code, message, source? }`; terminal and Markdown render them without changing points |
 
-`level`, `score`, dimensions, and checks remain present for diagnosis, but are provisional when their verdict is `incomplete`. Terminal and Markdown say the maturity is unavailable, and the badge value is `incomplete`, never L0-L4. Old reports without `verdicts` are treated as complete when `truncated` is `false`, and incomplete when it is `true`.
+`level`, `score`, dimensions, and checks remain present for diagnosis, but are provisional when their verdict is `incomplete`. Terminal and Markdown identify the unavailable snapshot. The badge always represents maturity and uses `incomplete`, never L0-L4, when maturity is incomplete. Old reports without `verdicts` are treated as complete when `truncated` is `false`, and incomplete when it is `true`.
 
-`--diff` compares **maturity** fields by default (top-level `level` / `score` / `checks`) and rejects an incomplete baseline or current result.
+`--diff` compares **maturity** fields by default (top-level `level` / `score` / `checks`) and rejects an incomplete maturity baseline or current result. An incomplete effective snapshot does not block a maturity diff.

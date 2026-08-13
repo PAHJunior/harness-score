@@ -119,6 +119,31 @@ describe('renderMarkdown', () => {
     expect(out).toContain('file-count-limit');
   });
 
+  test('keeps maturity authoritative and scopes the warning when only effective is incomplete', () => {
+    const out = renderMarkdown(
+      makeReport({
+        truncated: true,
+        scopes: { maturity: ['repo'], effective: ['repo', 'team'] },
+        verdicts: {
+          maturity: { status: 'complete', reasons: [] },
+          effective: {
+            status: 'incomplete',
+            reasons: [{ code: 'depth-limit', path: 'team:deep', limit: 8 }],
+          },
+        },
+      }),
+    );
+    expect(out).toContain('**Maturity level:** L1 · Documented');
+    expect(out).toContain('**Effective:** unavailable - incomplete scan');
+    expect(out).toContain(
+      '> ⚠ Effective scan is incomplete. Provisional effective results are not authoritative.',
+    );
+    expect(out).not.toContain('Maturity scan is incomplete');
+    expect(out).toContain('- **effective:** depth-limit at team:deep (limit 8)');
+    expect(out).toContain('## Dimensions');
+    expect(out).not.toContain('## Provisional dimensions');
+  });
+
   test('shows detected harnesses with display names, only when non-empty', () => {
     const detected = renderMarkdown(makeReport({ detectedHarnesses: ['cursor', 'claude-code'] }));
     expect(detected).toContain('**Detected harnesses:** Cursor, Claude Code');

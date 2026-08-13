@@ -161,7 +161,7 @@ function snapshotsEqual(a: ScoreSnapshot, b: ScoreSnapshot): boolean {
 }
 
 function contextReasons(ctx: ScanContext): ScanIncompleteReason[] {
-  if (ctx.incompleteReasons && ctx.incompleteReasons.length > 0) return ctx.incompleteReasons;
+  if (ctx.incompleteReasons && ctx.incompleteReasons.length > 0) return [...ctx.incompleteReasons];
   return ctx.truncated ? [{ code: 'file-count-limit' }] : [];
 }
 
@@ -177,8 +177,6 @@ export function buildReportFromContext(
   resolvedRoots: Report['resolvedRoots'],
 ): Report {
   const severities = resolveSeverities(config);
-  const maturityVerdict = contextVerdict(maturityCtx);
-  const effectiveVerdict = contextVerdict(effectiveCtx);
   const maturity = buildSnapshot(maturityCtx, severities);
   let effective = maturity;
   if (effectiveCtx !== maturityCtx) {
@@ -187,6 +185,8 @@ export function buildReportFromContext(
       effective = effSnapshot;
     }
   }
+  const maturityVerdict = contextVerdict(maturityCtx);
+  const effectiveVerdict = contextVerdict(effectiveCtx);
 
   const resolvedEntries = [...severities.entries()]
     .filter(([, v]) => v.source !== 'default')

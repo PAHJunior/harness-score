@@ -107,7 +107,9 @@ describe('renderTerminal', () => {
     );
     expect(out).toContain('Maturity: L1');
     expect(out).toContain('Effective: unavailable - incomplete scan');
+    expect(out).toContain('Effective scan incomplete · provisional effective results are not authoritative.');
     expect(out).toContain('effective: depth-limit at team:deep (limit 8)');
+    expect(out).not.toContain('Maturity scan incomplete');
     expect(out).not.toContain('Provisional dimensions:');
   });
 

@@ -76,4 +76,19 @@ describe('computeDiff', () => {
       'incomplete maturity reports',
     );
   });
+
+  test('remains maturity-only when effective is incomplete', () => {
+    const complete = score(path.join(FIXTURES, 'level-4'));
+    const effectiveIncomplete = {
+      ...complete,
+      truncated: true,
+      verdicts: {
+        maturity: { status: 'complete' as const, reasons: [] },
+        effective: { status: 'incomplete' as const, reasons: [{ code: 'depth-limit' as const }] },
+      },
+    };
+
+    expect(() => computeDiff(complete, effectiveIncomplete)).not.toThrow();
+    expect(computeDiff(complete, effectiveIncomplete).level.delta).toBe(0);
+  });
 });

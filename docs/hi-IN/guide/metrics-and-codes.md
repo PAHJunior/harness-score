@@ -182,12 +182,22 @@ Precedence: **CLI flags → Action inputs → config file → defaults**। `ext
 
 ## CLI flags (स्कैन कॉन्फ़िगरेशन)
 
+Repository maturity discovery पर production depth cap नहीं है। Known dependency
+और generated directories को छोड़ने के बाद इसमें tracked, untracked, और ignored
+files शामिल होते हैं। Repository scan में `file-count-limit` emergency
+1,000,000-file fuse को दर्शाता है; bounded user और extra-root overlays अभी भी
+`depth-limit` report कर सकते हैं। Check के request करने पर inspect न हो पाने वाला
+discovered path `unreadable-path` report करता है; जानबूझकर skip किए गए 512 KiB से
+बड़े bodies यह reason report नहीं करते। Internal symlinks follow और deduplicate
+होते हैं; scan root के बाहर का target `outside-root-symlink` report करता है और
+उसे traverse या read नहीं किया जाता।
+
 | Flag | Meaning |
 |---|---|
 | `--config <file>` | Specific path से config load करें |
 | `--scope user` | User scope enable (comma-separated: `user`, `system`) |
 | `--gate maturity\|effective` | `--min-level` के लिए score |
-| `--min-level <0-4>` | Complete gated score level से नीचे हो तो exit 1; कोई requested scope incomplete हो तो हमेशा exit 2 |
+| `--min-level <0-4>` | Complete gated score level से नीचे हो तो exit 1; gate द्वारा चुना गया snapshot incomplete हो तो exit 2 |
 | `--json` | Full report including `scopes`, `gate`, `effective`, और `verdicts` |
 
 ## GitHub Action इनपुट
@@ -201,7 +211,7 @@ Precedence: **CLI flags → Action inputs → config file → defaults**। `ext
 | `min-level` | `0` | Gated score level से नीचे हो तो fail |
 
 Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effective-percent`.
-अगर कोई requested scope incomplete है, तो Action इन outputs, badge, Markdown report, job summary, या PR comment को publish करने से पहले fail होती है।
+Action maturity complete होने पर ही maturity outputs, badge, और report publish करती है, और effective complete होने पर ही effective outputs publish करती है। अगर केवल effective incomplete है, तो `gate: maturity` warning के साथ pass हो सकता है; `gate: effective` exit 2 देता है। Maturity incomplete होने पर maturity outputs, badge, report, या PR comment publish नहीं होते।
 
 ## Report JSON फ़ील्ड (स्थिर)
 
@@ -216,14 +226,14 @@ Outputs: `level`, `level-name`, `percent` (maturity); `effective-level`, `effect
 | `effective` | Same shape: `{ level, score, dimensions, checks, detectedHarnesses }` |
 | `detectedHarnesses` | **Repo** में देखे गए tools (informational) |
 | `verdicts.maturity`, `verdicts.effective` | हर snapshot का completeness status और deterministic reasons: `complete` या `incomplete` |
-| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, या `unreadable-directory`, optional `path` और `limit` के साथ |
-| `truncated` | Compatibility alias; किसी भी requested snapshot के किसी कारण से incomplete होने पर `true` |
+| `verdicts.*.reasons[]` | `file-count-limit`, `depth-limit`, `unreadable-directory`, `unreadable-path`, या `outside-root-symlink`, optional `path` और `limit` के साथ |
+| `truncated` | Compatibility alias; maturity या effective snapshot के किसी कारण से incomplete होने पर `true` |
 | `preset` | `{ extends, rules, resolved }` — इस scan में actually apply हुई team customization; `resolved` सिर्फ वे checks list करता है जिनकी severity default से अलग है |
 | `level.capped`, `level.capReason` | जब अगले level की कोई blocking requirement वर्तमान config में कभी पूरी नहीं हो सकती (जैसे उसकी dimension preset से excluded), तो `capped` `true` होता है; `capReason` वजह बताता है |
 | `dimensions[].applicable` | `false` सिर्फ तब जब उस dimension का हर check `"off"` resolve हुआ हो |
 | `checks[].severity` | `"off"` \| `"warn"` \| `"error"` — इस scan ने उस check के लिए जो resolved severity use की |
 | `checks[].warnings` | Optional non-fatal diagnostics `{ code, message, source? }`; terminal और Markdown इन्हें points बदले बिना दिखाते हैं |
 
-`level`, `score`, dimensions, और checks diagnosis के लिए मौजूद रहते हैं, लेकिन संबंधित verdict `incomplete` होने पर provisional हैं। Terminal और Markdown maturity को unavailable दिखाते हैं, और badge value `incomplete` होती है, कभी L0-L4 नहीं। `verdicts` के बिना पुराने reports में `truncated: false` complete और `truncated: true` incomplete माना जाता है।
+`level`, `score`, dimensions, और checks diagnosis के लिए मौजूद रहते हैं, लेकिन संबंधित verdict `incomplete` होने पर provisional हैं। Terminal और Markdown unavailable snapshot को पहचानते हैं। Badge हमेशा maturity को दिखाता है और maturity incomplete होने पर `incomplete` value इस्तेमाल करता है, कभी L0-L4 नहीं। `verdicts` के बिना पुराने reports में `truncated: false` complete और `truncated: true` incomplete माना जाता है।
 
-`--diff` default में **maturity** fields compare करता है (top-level `level` / `score` / `checks`) और incomplete baseline या current result को reject करता है।
+`--diff` default में **maturity** fields compare करता है (top-level `level` / `score` / `checks`) और incomplete maturity baseline या current result को reject करता है। Incomplete effective snapshot maturity diff को block नहीं करता।
