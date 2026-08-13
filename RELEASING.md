@@ -11,6 +11,7 @@ no npm token, no long-lived secret stored anywhere in this repo.
    - `version` in `packages/cli/jsr.json`
    - the `packages/cli` workspace version in `package-lock.json`
    - the `version` input default in `action.yml` and `action/action.yml`
+   - the `version` input row in `action/README.md`
    - If Cursor plugin content changed: `plugins/cursor/.cursor-plugin/plugin.json` +
      an entry in `plugins/cursor/CHANGELOG.md` (it has its own release
      track and version number).

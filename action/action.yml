@@ -9,7 +9,7 @@ branding:
 
 inputs:
   min-level:
-    description: 'Fail below this maturity level (0–4). Incomplete scans always fail, including at 0.'
+    description: 'Fail below this level (0–4). An incomplete gated snapshot exits 2, including at 0.'
     required: false
     default: '0'
   badge:
@@ -63,10 +63,10 @@ outputs:
     description: 'Maturity score percentage.'
     value: ${{ steps.scan.outputs.percent }}
   effective-level:
-    description: 'Effective level index when global scopes are enabled.'
+    description: 'Effective level index when the effective snapshot is complete.'
     value: ${{ steps.scan.outputs.effective-level }}
   effective-percent:
-    description: 'Effective score percentage when global scopes are enabled.'
+    description: 'Effective score percentage when the effective snapshot is complete.'
     value: ${{ steps.scan.outputs.effective-percent }}
 
 runs:
@@ -214,15 +214,18 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         HS_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        HS_CONFIG: ${{ inputs.config }}
         HS_VERSION: ${{ inputs.version }}
         HS_WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
+        BASELINE_ARGS=(--quiet --json)
+        [ -n "$HS_CONFIG" ] && BASELINE_ARGS+=(--config "$HS_CONFIG")
         git fetch origin "$HS_BASE_REF"
         git worktree remove /tmp/harness-score-base --force 2>/dev/null || true
         git worktree add /tmp/harness-score-base FETCH_HEAD
         npx -y "harness-score@$HS_VERSION" "/tmp/harness-score-base/$HS_WORKING_DIRECTORY" \
-          --quiet --json > /tmp/harness-score-base.json
+          "${BASELINE_ARGS[@]}" > /tmp/harness-score-base.json
         git worktree remove /tmp/harness-score-base --force
 
     - id: diff
@@ -230,10 +233,13 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
+        HS_CONFIG: ${{ inputs.config }}
         HS_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        npx -y "harness-score@$HS_VERSION" . --quiet --json \
+        DIFF_ARGS=(--quiet --json)
+        [ -n "$HS_CONFIG" ] && DIFF_ARGS+=(--config "$HS_CONFIG")
+        npx -y "harness-score@$HS_VERSION" . "${DIFF_ARGS[@]}" \
           --diff /tmp/harness-score-base.json > /tmp/harness-score-diff.json
 
     - id: comment
