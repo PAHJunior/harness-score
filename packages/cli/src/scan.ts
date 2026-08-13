@@ -70,6 +70,13 @@ interface WalkOptions {
   statPath?: (path: string) => fs.Stats;
 }
 
+interface PendingDirectory {
+  abs: string;
+  rel: string;
+  depth: number;
+  real: string;
+}
+
 export interface WalkResult {
   files: string[];
   truncated: boolean;
@@ -103,11 +110,17 @@ export function walkDirectory(root: string, options: WalkOptions = {}): WalkResu
   const files: string[] = [];
   const incompleteReasons: ScanIncompleteReason[] = [];
   const rootReal = safeRealpath(root) ?? path.resolve(root);
-  const visitedRealDirs = new Set<string>([rootReal]);
-  const stack: Array<{ abs: string; rel: string; depth: number }> = [{ abs: root, rel: '', depth: 0 }];
+  const visitedRealDirs = new Set<string>();
+  const stack: PendingDirectory[] = [{ abs: root, rel: '', depth: 0, real: rootReal }];
+  const deferredSymlinkDirs: PendingDirectory[] = [];
 
-  while (stack.length > 0) {
-    const dir = stack.pop()!;
+  while (stack.length > 0 || deferredSymlinkDirs.length > 0) {
+    // Exhaust physical directories before aliases so a lexically earlier
+    // symlink cannot hide the canonical repository path for the same target.
+    const dir = stack.pop() ?? deferredSymlinkDirs.pop()!;
+    if (visitedRealDirs.has(dir.real)) continue;
+    visitedRealDirs.add(dir.real);
+
     let entries: fs.Dirent[];
     try {
       entries = readDirectory(dir.abs);
@@ -119,10 +132,16 @@ export function walkDirectory(root: string, options: WalkOptions = {}): WalkResu
       continue;
     }
     entries.sort((a, b) => compareLexically(a.name, b.name));
-    const childDirs: Array<{ abs: string; rel: string; depth: number }> = [];
+    const childDirs: PendingDirectory[] = [];
+    const childSymlinkDirs: PendingDirectory[] = [];
     for (const entry of entries) {
       const rel = dir.rel === '' ? entry.name : `${dir.rel}/${entry.name}`;
-      if (SKIP_RELATIVE_PATHS.has(rel)) continue;
+      if (
+        SKIP_RELATIVE_PATHS.has(rel) ||
+        (SKIP_DIRS.has(entry.name) && (entry.isDirectory() || entry.isSymbolicLink()))
+      ) {
+        continue;
+      }
 
       const abs = path.join(dir.abs, entry.name);
       let isDir = entry.isDirectory();
@@ -153,18 +172,17 @@ export function walkDirectory(root: string, options: WalkOptions = {}): WalkResu
       }
 
       if (isDir) {
-        if (SKIP_DIRS.has(entry.name)) continue;
         if (maxDepth !== undefined && dir.depth >= maxDepth) {
           addFirstReason(incompleteReasons, { code: 'depth-limit', path: rel, limit: maxDepth });
           continue;
         }
-        // Dedup by real path so symlink cycles (and hardlink-style repeats)
-        // can't loop forever; readdirSync/statSync below still follow the
-        // symlink transparently via its own (non-resolved) `abs` path.
         const real = symlinkReal ?? safeRealpath(abs) ?? abs;
-        if (visitedRealDirs.has(real)) continue;
-        visitedRealDirs.add(real);
-        childDirs.push({ abs, rel, depth: dir.depth + 1 });
+        const child = { abs, rel, depth: dir.depth + 1, real };
+        if (entry.isSymbolicLink()) {
+          childSymlinkDirs.push(child);
+        } else {
+          childDirs.push(child);
+        }
       } else if (isFile) {
         if (files.length >= maxFiles) {
           addFirstReason(incompleteReasons, {
@@ -179,6 +197,9 @@ export function walkDirectory(root: string, options: WalkOptions = {}): WalkResu
       }
     }
     for (let i = childDirs.length - 1; i >= 0; i -= 1) stack.push(childDirs[i]!);
+    for (let i = childSymlinkDirs.length - 1; i >= 0; i -= 1) {
+      deferredSymlinkDirs.push(childSymlinkDirs[i]!);
+    }
   }
   files.sort(compareLexically);
   return { files, truncated: incompleteReasons.length > 0, incompleteReasons };

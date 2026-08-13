@@ -115,23 +115,65 @@ describe('createScanContext — symlinks', () => {
     expect(ctx.truncated).toBe(false);
   });
 
-  test('walks only the first deterministic alias to the same directory', () => {
+  test('prefers the canonical directory over lexically earlier aliases', () => {
     const root = mkTmpDir();
     const repo = path.join(root, 'repo');
     fs.mkdirSync(repo);
-    const target = path.join(repo, 'target');
-    fs.mkdirSync(target);
-    fs.writeFileSync(path.join(target, 'file.txt'), 'content');
+    const shared = path.join(repo, 'shared');
+    fs.mkdirSync(shared);
+    fs.writeFileSync(path.join(shared, 'file.txt'), 'content');
     try {
-      fs.symlinkSync(target, path.join(repo, 'alias-b'), 'dir');
-      fs.symlinkSync(target, path.join(repo, 'alias-a'), 'dir');
+      fs.symlinkSync(shared, path.join(repo, 'alias-b'), 'dir');
+      fs.symlinkSync(shared, path.join(repo, 'alias-a'), 'dir');
     } catch {
       return;
     }
 
     const ctx = createScanContext(repo);
-    expect(ctx.files).toEqual(['alias-a/file.txt']);
+    expect(ctx.files).toEqual(['shared/file.txt']);
     expect(ctx.truncated).toBe(false);
+  });
+
+  test('does not let a harness-shaped alias hide the canonical harness path', () => {
+    const root = mkTmpDir();
+    const cursorRules = path.join(root, '.cursor', 'rules');
+    fs.mkdirSync(cursorRules, { recursive: true });
+    fs.writeFileSync(
+      path.join(cursorRules, 'project.mdc'),
+      '---\ndescription: Project rules\nglobs: "src/**"\n---\n\nRule body.\n',
+    );
+    try {
+      fs.symlinkSync(path.join(root, '.cursor'), path.join(root, '.claude'), 'dir');
+    } catch {
+      return;
+    }
+
+    const ctx = createScanContext(root);
+    const report = buildReportFromScanContext(ctx);
+
+    expect(ctx.files).toEqual(['.cursor/rules/project.mdc']);
+    expect(report.detectedHarnesses).toContain('cursor');
+    expect(report.verdicts?.maturity).toEqual({ status: 'complete', reasons: [] });
+  });
+
+  test('skips generated-directory symlinks before inspecting their targets', () => {
+    const root = mkTmpDir();
+    const repo = path.join(root, 'repo');
+    const outside = path.join(root, 'outside');
+    fs.mkdirSync(repo);
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, 'irrelevant.txt'), 'must stay outside');
+    try {
+      fs.symlinkSync(outside, path.join(repo, 'node_modules'), 'dir');
+    } catch {
+      return;
+    }
+
+    const ctx = createScanContext(repo);
+
+    expect(ctx.files).toEqual([]);
+    expect(ctx.truncated).toBe(false);
+    expect(ctx.incompleteReasons).toEqual([]);
   });
 
   test('does not enumerate an external directory symlink and fails closed with its path', () => {
