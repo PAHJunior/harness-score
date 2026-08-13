@@ -67,6 +67,7 @@ interface WalkOptions {
   maxDepth?: number;
   maxFiles?: number;
   readDirectory?: (directory: string) => fs.Dirent[];
+  statPath?: (path: string) => fs.Stats;
 }
 
 export interface WalkResult {
@@ -79,15 +80,30 @@ function addFirstReason(reasons: ScanIncompleteReason[], reason: ScanIncompleteR
   if (!reasons.some((existing) => existing.code === reason.code)) reasons.push(reason);
 }
 
+function isMissingOrBrokenSymlink(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException)?.code;
+  return code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP';
+}
+
+function isInsideRoot(rootReal: string, targetReal: string): boolean {
+  const relative = path.relative(rootReal, targetReal);
+  return (
+    relative === '' ||
+    (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`))
+  );
+}
+
 /** Internal/testable deterministic filesystem walker. `maxDepth` is a test seam only. */
 export function walkDirectory(root: string, options: WalkOptions = {}): WalkResult {
   const maxDepth = options.maxDepth;
   const maxFiles = options.maxFiles ?? MAX_FILES;
   const readDirectory =
     options.readDirectory ?? ((directory: string) => fs.readdirSync(directory, { withFileTypes: true }));
+  const statPath = options.statPath ?? fs.statSync;
   const files: string[] = [];
   const incompleteReasons: ScanIncompleteReason[] = [];
-  const visitedRealDirs = new Set<string>([safeRealpath(root) ?? root]);
+  const rootReal = safeRealpath(root) ?? path.resolve(root);
+  const visitedRealDirs = new Set<string>([rootReal]);
   const stack: Array<{ abs: string; rel: string; depth: number }> = [{ abs: root, rel: '', depth: 0 }];
 
   while (stack.length > 0) {
@@ -111,13 +127,26 @@ export function walkDirectory(root: string, options: WalkOptions = {}): WalkResu
       const abs = path.join(dir.abs, entry.name);
       let isDir = entry.isDirectory();
       let isFile = entry.isFile();
+      let symlinkReal: string | null = null;
 
       if (entry.isSymbolicLink()) {
         let stat: fs.Stats;
         try {
-          stat = fs.statSync(abs); // follows the symlink, unlike lstatSync
-        } catch {
-          continue; // broken symlink target
+          stat = statPath(abs); // follows the symlink, unlike lstatSync
+        } catch (error) {
+          if (!isMissingOrBrokenSymlink(error)) {
+            addFirstReason(incompleteReasons, { code: 'unreadable-path', path: rel });
+          }
+          continue;
+        }
+        symlinkReal = safeRealpath(abs);
+        if (symlinkReal === null) {
+          addFirstReason(incompleteReasons, { code: 'unreadable-path', path: rel });
+          continue;
+        }
+        if (!isInsideRoot(rootReal, symlinkReal)) {
+          addFirstReason(incompleteReasons, { code: 'outside-root-symlink', path: rel });
+          continue;
         }
         isDir = stat.isDirectory();
         isFile = stat.isFile();
@@ -132,7 +161,7 @@ export function walkDirectory(root: string, options: WalkOptions = {}): WalkResu
         // Dedup by real path so symlink cycles (and hardlink-style repeats)
         // can't loop forever; readdirSync/statSync below still follow the
         // symlink transparently via its own (non-resolved) `abs` path.
-        const real = safeRealpath(abs) ?? abs;
+        const real = symlinkReal ?? safeRealpath(abs) ?? abs;
         if (visitedRealDirs.has(real)) continue;
         visitedRealDirs.add(real);
         childDirs.push({ abs, rel, depth: dir.depth + 1 });
@@ -172,6 +201,7 @@ function buildContext(
   repoFiles: string[],
   incompleteReasons: ScanIncompleteReason[],
   overlayAbsByRel: Map<string, string>,
+  overlayLabelByRel: Map<string, string>,
 ): ScanContext {
   const repoSet = new Set(repoFiles);
   const fileSet = new Set(repoFiles);
@@ -185,7 +215,9 @@ function buildContext(
   return {
     root,
     files,
-    truncated: incompleteReasons.length > 0,
+    get truncated(): boolean {
+      return incompleteReasons.length > 0;
+    },
     incompleteReasons,
     has(relPath: string): boolean {
       return fileSet.has(relPath);
@@ -207,6 +239,12 @@ function buildContext(
           }
         } catch {
           content = null;
+          addFirstReason(incompleteReasons, {
+            code: 'unreadable-path',
+            path: repoSet.has(relPath)
+              ? relPath
+              : `${overlayLabelByRel.get(relPath) ?? 'overlay'}:${relPath}`,
+          });
         }
       }
       contentCache.set(relPath, content);
@@ -229,6 +267,7 @@ export function createScanContext(rootInput: string, options: CreateScanOptions 
   const overlays = options.overlays ?? [];
 
   const overlayAbsByRel = new Map<string, string>();
+  const overlayLabelByRel = new Map<string, string>();
   const effectiveReasons = normalizeReasons(repoTruncated, repoReasons);
   const repoSet = new Set(repoFiles);
 
@@ -242,12 +281,13 @@ export function createScanContext(rootInput: string, options: CreateScanOptions 
     for (const [rel, abs] of overlay.files) {
       if (repoSet.has(rel)) continue;
       overlayAbsByRel.set(rel, abs);
+      overlayLabelByRel.set(rel, overlay.label);
     }
   }
 
   if (overlays.length === 0) {
-    return buildContext(root, repoFiles, effectiveReasons, overlayAbsByRel);
+    return buildContext(root, repoFiles, effectiveReasons, overlayAbsByRel, overlayLabelByRel);
   }
 
-  return buildContext(root, repoFiles, effectiveReasons, overlayAbsByRel);
+  return buildContext(root, repoFiles, effectiveReasons, overlayAbsByRel, overlayLabelByRel);
 }

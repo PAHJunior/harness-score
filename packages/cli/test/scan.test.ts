@@ -3,6 +3,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { createScanContext, walkDirectory } from '../src/scan.js';
+import { buildReportFromScanContext } from '../src/score.js';
+import type { ScanContext } from '../src/types.js';
 
 const tmpDirs: string[] = [];
 
@@ -10,6 +12,15 @@ function mkTmpDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-score-scan-'));
   tmpDirs.push(dir);
   return dir;
+}
+
+function virtualDirent(name: string, type: 'directory' | 'file' | 'symlink'): fs.Dirent {
+  return {
+    name,
+    isDirectory: () => type === 'directory',
+    isFile: () => type === 'file',
+    isSymbolicLink: () => type === 'symlink',
+  } as fs.Dirent;
 }
 
 afterEach(() => {
@@ -36,35 +47,46 @@ describe('createScanContext — production limits', () => {
     expect(ctx.incompleteReasons).toEqual([]);
   });
 
-  test('scans a 25,000-file repository past the former 20,000-file limit', () => {
+  test('detects a relevant signal after the former 20,000-file limit', () => {
     const fileCount = 25_000;
     const virtualFiles = Array.from({ length: fileCount }, (_, index) => {
       const name = `file-${index.toString().padStart(5, '0')}.txt`;
-      return {
-        name,
-        isDirectory: () => false,
-        isFile: () => true,
-        isSymbolicLink: () => false,
-      } as fs.Dirent;
+      return virtualDirent(name, 'file');
     });
+    virtualFiles.push(virtualDirent('zzzz-signal', 'directory'));
 
-    const result = walkDirectory('virtual-root', { readDirectory: () => virtualFiles });
+    const result = walkDirectory('virtual-root', {
+      readDirectory: (directory) =>
+        directory.endsWith('zzzz-signal') ? [virtualDirent('AGENTS.md', 'file')] : virtualFiles,
+    });
+    const fileSet = new Set(result.files);
+    const ctx: ScanContext = {
+      root: 'virtual-root',
+      files: result.files,
+      truncated: result.truncated,
+      incompleteReasons: result.incompleteReasons,
+      has: (relPath) => fileSet.has(relPath),
+      read: (relPath) => (relPath === 'zzzz-signal/AGENTS.md' ? '# nested agent context' : null),
+      matching: (re) => result.files.filter((file) => re.test(file)),
+    };
+    const report = buildReportFromScanContext(ctx);
 
-    expect(result.files).toHaveLength(fileCount);
-    expect(result.files.at(-1)).toBe('file-24999.txt');
+    expect(result.files).toHaveLength(fileCount + 1);
+    expect(result.files.at(-1)).toBe('zzzz-signal/AGENTS.md');
     expect(result.truncated).toBe(false);
     expect(result.incompleteReasons).toEqual([]);
+    expect(report.checks.find((check) => check.id === 'CTX-03')?.passed).toBe(true);
   });
 });
 
 describe('createScanContext — symlinks', () => {
-  test('follows a symlinked directory into a sibling', () => {
+  test('follows a symlinked directory whose target is inside the scan root', () => {
     const root = mkTmpDir();
-    fs.mkdirSync(path.join(root, 'target'));
-    fs.writeFileSync(path.join(root, 'target', 'AGENTS.md'), '# hi');
     fs.mkdirSync(path.join(root, 'repo'));
+    fs.mkdirSync(path.join(root, 'repo', 'target'));
+    fs.writeFileSync(path.join(root, 'repo', 'target', 'AGENTS.md'), '# hi');
     try {
-      fs.symlinkSync(path.join(root, 'target'), path.join(root, 'repo', 'shared'), 'dir');
+      fs.symlinkSync(path.join(root, 'repo', 'target'), path.join(root, 'repo', 'shared'), 'dir');
     } catch {
       // Symlink creation can require elevated privileges on some Windows
       // setups; skip rather than fail the suite in that environment.
@@ -89,11 +111,187 @@ describe('createScanContext — symlinks', () => {
 
     const ctx = createScanContext(root);
     const occurrences = ctx.files.filter((f) => f.endsWith('file.txt'));
-    // The cycle must not be walked more than once — a handful of legitimate
-    // depth-bounded traversals through the loop is fine, an unbounded one
-    // (thousands of copies) is the bug this test guards against.
-    expect(occurrences.length).toBeLessThan(20);
+    expect(occurrences).toEqual(['a/file.txt']);
     expect(ctx.truncated).toBe(false);
+  });
+
+  test('walks only the first deterministic alias to the same directory', () => {
+    const root = mkTmpDir();
+    const repo = path.join(root, 'repo');
+    fs.mkdirSync(repo);
+    const target = path.join(repo, 'target');
+    fs.mkdirSync(target);
+    fs.writeFileSync(path.join(target, 'file.txt'), 'content');
+    try {
+      fs.symlinkSync(target, path.join(repo, 'alias-b'), 'dir');
+      fs.symlinkSync(target, path.join(repo, 'alias-a'), 'dir');
+    } catch {
+      return;
+    }
+
+    const ctx = createScanContext(repo);
+    expect(ctx.files).toEqual(['alias-a/file.txt']);
+    expect(ctx.truncated).toBe(false);
+  });
+
+  test('does not enumerate an external directory symlink and fails closed with its path', () => {
+    const root = mkTmpDir();
+    const repo = path.join(root, 'repo');
+    const outside = path.join(root, 'outside');
+    fs.mkdirSync(repo);
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, 'AGENTS.md'), '# must stay outside');
+    try {
+      fs.symlinkSync(outside, path.join(repo, 'external-dir'), 'dir');
+    } catch {
+      return;
+    }
+
+    const ctx = createScanContext(repo);
+    const report = buildReportFromScanContext(ctx);
+
+    expect(ctx.files).toEqual([]);
+    expect(ctx.has('external-dir/AGENTS.md')).toBe(false);
+    expect(ctx.read('external-dir/AGENTS.md')).toBeNull();
+    expect(ctx.truncated).toBe(true);
+    expect(ctx.incompleteReasons).toEqual([{ code: 'outside-root-symlink', path: 'external-dir' }]);
+    expect(report.verdicts?.maturity).toEqual({
+      status: 'incomplete',
+      reasons: [{ code: 'outside-root-symlink', path: 'external-dir' }],
+    });
+  });
+
+  test('does not discover or read an external file symlink and fails closed with its path', () => {
+    const root = mkTmpDir();
+    const repo = path.join(root, 'repo');
+    const outsideFile = path.join(root, 'outside-AGENTS.md');
+    fs.mkdirSync(repo);
+    fs.writeFileSync(outsideFile, '# must not be read');
+    try {
+      fs.symlinkSync(outsideFile, path.join(repo, 'AGENTS.md'), 'file');
+    } catch {
+      return;
+    }
+
+    const ctx = createScanContext(repo);
+
+    expect(ctx.files).toEqual([]);
+    expect(ctx.has('AGENTS.md')).toBe(false);
+    expect(ctx.read('AGENTS.md')).toBeNull();
+    expect(ctx.truncated).toBe(true);
+    expect(ctx.incompleteReasons).toEqual([{ code: 'outside-root-symlink', path: 'AGENTS.md' }]);
+  });
+
+  test('records symlink stat permission and I/O errors as unreadable paths', () => {
+    for (const code of ['EACCES', 'EPERM', 'EIO']) {
+      const error = Object.assign(new Error(code), { code });
+      const result = walkDirectory('virtual-root', {
+        readDirectory: () => [virtualDirent('linked', 'symlink')],
+        statPath: () => {
+          throw error;
+        },
+      });
+      expect(result.incompleteReasons).toEqual([{ code: 'unreadable-path', path: 'linked' }]);
+      expect(result.truncated).toBe(true);
+    }
+  });
+
+  test('ignores only genuinely missing or broken symlink targets', () => {
+    for (const code of ['ENOENT', 'ENOTDIR', 'ELOOP']) {
+      const error = Object.assign(new Error(code), { code });
+      const result = walkDirectory('virtual-root', {
+        readDirectory: () => [virtualDirent('broken', 'symlink')],
+        statPath: () => {
+          throw error;
+        },
+      });
+      expect(result).toEqual({ files: [], truncated: false, incompleteReasons: [] });
+    }
+  });
+});
+
+describe('createScanContext — preserved safety boundaries', () => {
+  test('skips dependency and generated directories plus generated Yarn paths', () => {
+    const root = mkTmpDir();
+    const skippedDirectories = [
+      '.git',
+      'node_modules',
+      'dist',
+      'build',
+      'out',
+      'coverage',
+      'target',
+      'vendor',
+      '__pycache__',
+      '.venv',
+      'venv',
+      '.tox',
+      '.next',
+      '.nuxt',
+      '.cache',
+      '.turbo',
+      '.idea',
+      '.nx',
+      '.pnp',
+      '.parcel-cache',
+      '.angular',
+      '.pytest_cache',
+      '.mypy_cache',
+      '.ruff_cache',
+    ];
+    for (const directory of skippedDirectories) {
+      fs.mkdirSync(path.join(root, directory), { recursive: true });
+      fs.writeFileSync(path.join(root, directory, 'AGENTS.md'), '# skipped');
+    }
+    fs.mkdirSync(path.join(root, '.yarn', 'cache'), { recursive: true });
+    fs.mkdirSync(path.join(root, '.yarn', 'unplugged'), { recursive: true });
+    fs.mkdirSync(path.join(root, '.yarn', 'plugins'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.yarn', 'cache', 'AGENTS.md'), '# skipped');
+    fs.writeFileSync(path.join(root, '.yarn', 'unplugged', 'AGENTS.md'), '# skipped');
+    fs.writeFileSync(path.join(root, '.yarn', 'install-state.gz'), 'skipped');
+    fs.writeFileSync(path.join(root, '.yarn', 'plugins', 'kept.cjs'), 'kept');
+
+    const ctx = createScanContext(root);
+
+    expect(ctx.files).toEqual(['.yarn/plugins/kept.cjs']);
+    expect(ctx.truncated).toBe(false);
+  });
+
+  test('reads exactly 512 KiB but intentionally ignores larger file bodies', () => {
+    const root = mkTmpDir();
+    const atLimit = 'a'.repeat(512 * 1024);
+    fs.writeFileSync(path.join(root, 'at-limit.txt'), atLimit);
+    fs.writeFileSync(path.join(root, 'over-limit.txt'), `${atLimit}b`);
+
+    const ctx = createScanContext(root);
+
+    expect(ctx.read('at-limit.txt')).toBe(atLimit);
+    expect(ctx.read('over-limit.txt')).toBeNull();
+    expect(ctx.truncated).toBe(false);
+    expect(ctx.incompleteReasons).toEqual([]);
+  });
+
+  test('marks a discovered file that becomes unreadable when requested', () => {
+    const root = mkTmpDir();
+    const agentsPath = path.join(root, 'AGENTS.md');
+    fs.writeFileSync(agentsPath, '# present during discovery');
+    const ctx = createScanContext(root);
+    fs.unlinkSync(agentsPath);
+
+    expect(ctx.read('AGENTS.md')).toBeNull();
+    expect(ctx.truncated).toBe(true);
+    expect(ctx.incompleteReasons).toEqual([{ code: 'unreadable-path', path: 'AGENTS.md' }]);
+  });
+
+  test('prefixes an unreadable overlay path with its deterministic label', () => {
+    const root = mkTmpDir();
+    const missingOverlayFile = path.join(root, 'missing-AGENTS.md');
+    const ctx = createScanContext(root, {
+      overlays: [{ label: 'team', files: new Map([['shared/AGENTS.md', missingOverlayFile]]) }],
+    });
+
+    expect(ctx.read('shared/AGENTS.md')).toBeNull();
+    expect(ctx.incompleteReasons).toEqual([{ code: 'unreadable-path', path: 'team:shared/AGENTS.md' }]);
   });
 });
 

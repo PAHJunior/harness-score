@@ -63,6 +63,11 @@ const checkOutcome: CheckOutcome = { passed: true, evidence: 'x' };
 const checkResult: CheckResult = scored.checks[0]!;
 const diagnostic: ScanDiagnostic = { code: 'future-event', message: 'x', source: '.claude/settings.json' };
 const incompleteReason: ScanIncompleteReason = { code: 'depth-limit', path: 'deep', limit: 10 };
+const unreadablePathReason: ScanIncompleteReason = { code: 'unreadable-path', path: 'AGENTS.md' };
+const outsideRootSymlinkReason: ScanIncompleteReason = {
+  code: 'outside-root-symlink',
+  path: 'shared/AGENTS.md',
+};
 const verdict: ScanVerdict = reportVerdict(scored, 'maturity');
 const verdictStatus: ScanVerdictStatus = verdict.status;
 const complete: boolean = reportScopeIsComplete(scored, 'maturity');
@@ -94,6 +99,8 @@ void [
   checkResult,
   diagnostic,
   incompleteReason,
+  unreadablePathReason,
+  outsideRootSymlinkReason,
   verdict,
   verdictStatus,
   complete,
