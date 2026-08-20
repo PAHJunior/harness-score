@@ -351,6 +351,38 @@ describe('ci checks', () => {
     expect((await check('CI-01')).run(ctx).passed).toBe(true);
   });
 
+  test('CI-01 passes with a root Jenkinsfile', async () => {
+    const ctx = fakeContext({ Jenkinsfile: 'pipeline { agent any }' });
+    expect((await check('CI-01')).run(ctx).passed).toBe(true);
+  });
+
+  // Workspace layout: the harness lives in a control repo at the root and each
+  // code repo is a subfolder with its own pipeline file. GitHub Actions already
+  // matched at depth; the other providers did not.
+  test('CI-01 detects non-GitHub CI files below the scan root', async () => {
+    for (const file of [
+      'backend/Jenkinsfile',
+      'services/api/.gitlab-ci.yml',
+      'apps/web/azure-pipelines.yml',
+      'packages/cli/.circleci/config.yml',
+      'infra/bitbucket-pipelines.yml',
+    ]) {
+      const ctx = fakeContext({ [file]: 'sh "npm test"' });
+      expect((await check('CI-01')).run(ctx).passed, file).toBe(true);
+    }
+  });
+
+  test('CI-02 and CI-03 inspect a nested pipeline file', async () => {
+    const ctx = fakeContext({ 'backend/Jenkinsfile': 'sh "npm test"\nsh "npm run lint"' });
+    expect((await check('CI-02')).run(ctx).passed).toBe(true);
+    expect((await check('CI-03')).run(ctx).passed).toBe(true);
+  });
+
+  test('CI-01 does not match a filename that merely ends with a CI file name', async () => {
+    const ctx = fakeContext({ 'docs/not-a-Jenkinsfile': 'x', 'docs/Jenkinsfile.md': 'x' });
+    expect((await check('CI-01')).run(ctx).passed).toBe(false);
+  });
+
   test('CI-02 recognizes turbo/nx/pnpm-filter monorepo test invocations', async () => {
     const turbo = fakeContext({ '.github/workflows/ci.yml': 'run: turbo run test' });
     expect((await check('CI-02')).run(turbo).passed).toBe(true);

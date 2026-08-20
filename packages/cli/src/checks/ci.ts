@@ -1,17 +1,21 @@
 import type { Check, ScanContext } from '../types.js';
 import { safeJsonParse } from '../util.js';
 
+// Every provider is matched depth-independently: in a workspace layout the
+// agent harness lives in a control repo at the root and the code repos are
+// subfolders, each carrying its own pipeline file. Matching only at depth 0
+// scored those repos 0/14 on CI while the harness itself was complete.
 const WORKFLOW_RE = /(^|\/)\.github\/workflows\/[^/]+\.(yml|yaml)$/;
-const OTHER_CI = [
-  '.gitlab-ci.yml',
-  'azure-pipelines.yml',
-  '.circleci/config.yml',
-  'Jenkinsfile',
-  'bitbucket-pipelines.yml',
+const OTHER_CI_RES = [
+  /(^|\/)\.gitlab-ci\.yml$/,
+  /(^|\/)azure-pipelines\.yml$/,
+  /(^|\/)\.circleci\/config\.yml$/,
+  /(^|\/)Jenkinsfile$/,
+  /(^|\/)bitbucket-pipelines\.yml$/,
 ];
 
 function ciFiles(ctx: ScanContext): string[] {
-  return [...ctx.matching(WORKFLOW_RE), ...OTHER_CI.filter((f) => ctx.has(f))];
+  return [WORKFLOW_RE, ...OTHER_CI_RES].flatMap((re) => ctx.matching(re));
 }
 
 function ciContent(ctx: ScanContext): string {
