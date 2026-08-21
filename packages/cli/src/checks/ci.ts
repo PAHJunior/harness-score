@@ -15,7 +15,7 @@ const OTHER_CI_RES = [
 ];
 
 function ciFiles(ctx: ScanContext): string[] {
-  return [WORKFLOW_RE, ...OTHER_CI_RES].flatMap((re) => ctx.matching(re));
+  return [...new Set([WORKFLOW_RE, ...OTHER_CI_RES].flatMap((re) => ctx.matching(re)))];
 }
 
 function ciContent(ctx: ScanContext): string {

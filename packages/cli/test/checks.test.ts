@@ -356,6 +356,15 @@ describe('ci checks', () => {
     expect((await check('CI-01')).run(ctx).passed).toBe(true);
   });
 
+  test('CI-01 de-duplicates files that match multiple provider patterns', async () => {
+    const file = '.github/workflows/bitbucket-pipelines.yml';
+    const ctx = fakeContext({ [file]: 'run: npm test' });
+    const outcome = (await check('CI-01')).run(ctx);
+
+    expect(outcome.passed).toBe(true);
+    expect(outcome.evidence).toBe(`Found: ${file}.`);
+  });
+
   // Workspace layout: the harness lives in a control repo at the root and each
   // code repo is a subfolder with its own pipeline file. GitHub Actions already
   // matched at depth; the other providers did not.
