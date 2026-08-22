@@ -561,6 +561,7 @@ prettier/biome、black/ruff-format、gofmt/rustfmt。
 
 #### CI-01 · CI pipeline configured — 4 pts {#ci-01}
 GitHub Actions workflow（或 GitLab/CircleCI/Jenkins 等价物）。
+检测基于文件系统，会计入扫描根目录下任意深度的文件，因此嵌套工作区项目中的 CI 文件也算。它不会验证 CI 平台是否实际执行该文件。
 **修复：** 添加 `.github/workflows/ci.yml`，每次 push 运行传感器。
 
 #### CI-02 · CI runs the tests — 4 pts {#ci-02}
