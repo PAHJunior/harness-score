@@ -574,6 +574,9 @@ tree में कम से कम एक वास्तविक test फ़�
 
 #### CI-01 · CI pipeline configured — 4 pts {#ci-01}
 GitHub Actions workflow (या GitLab/CircleCI/Jenkins equivalent)।
+Detection filesystem पर आधारित है और scan root के नीचे किसी भी depth पर लागू
+होती है; इसलिए nested workspace projects की CI files भी count होती हैं। यह
+verify नहीं करती कि provider वास्तव में उस file को execute करता है।
 **सुधार:** `.github/workflows/ci.yml` जोड़ें जो हर push पर sensors चलाए।
 
 #### CI-02 · CI runs the tests — 4 pts {#ci-02}

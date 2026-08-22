@@ -606,6 +606,10 @@ At least one actual test file in the tree.
 
 #### CI-01 · CI pipeline configured — 4 pts {#ci-01}
 GitHub Actions workflow (or GitLab/CircleCI/Jenkins equivalent).
+La detección se basa en el filesystem y funciona a cualquier profundidad por
+debajo de la raíz del scan. Por lo tanto, también cuentan los archivos de CI en
+proyectos anidados de un workspace. No verifica si el proveedor realmente
+ejecuta el archivo.
 **Corrección:** add `.github/workflows/ci.yml` running your sensors on every push.
 
 #### CI-02 · CI runs the tests — 4 pts {#ci-02}
