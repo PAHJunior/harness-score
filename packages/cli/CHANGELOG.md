@@ -1,5 +1,11 @@
 # harness-score
 
+## 1.6.2
+
+### Patch Changes
+
+- 9b55d4f: Detect Google Cloud Build CI configurations under `cloudbuild/` for CI checks.
+
 ## 1.6.1
 
 ### Patch Changes
