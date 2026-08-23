@@ -5,7 +5,7 @@ import { safeJsonParse } from '../util.js';
 // agent harness lives in a control repo at the root and the code repos are
 // subfolders, each carrying its own pipeline file. Matching only at depth 0
 // scored those repos 0/14 on CI while the harness itself was complete.
-const WORKFLOW_RE = /(^|\/)\.github\/workflows\/[^/]+\.(yml|yaml)$/;
+const WORKFLOW_RE = /(^|\/)\.(github|forgejo)\/workflows\/[^/]+\.(yml|yaml)$/;
 const OTHER_CI_RES = [
   /(^|\/)\.gitlab-ci\.yml$/,
   /(^|\/)azure-pipelines\.yml$/,
