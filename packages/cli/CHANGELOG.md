@@ -1,5 +1,11 @@
 # harness-score
 
+## 1.6.3
+
+### Patch Changes
+
+- 4212dab: Detect Forgejo Actions workflows in `.forgejo/workflows/` for CI checks.
+
 ## 1.6.2
 
 ### Patch Changes
