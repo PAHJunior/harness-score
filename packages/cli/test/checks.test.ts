@@ -351,6 +351,18 @@ describe('ci checks', () => {
     expect((await check('CI-01')).run(ctx).passed).toBe(true);
   });
 
+  test('CI-01, CI-02, and CI-03 recognize a Forgejo Actions workflow', async () => {
+    const file = '.forgejo/workflows/verify.yaml';
+    const ctx = fakeContext({ [file]: 'run: pnpm test\nrun: pnpm lint' });
+
+    expect((await check('CI-01')).run(ctx)).toMatchObject({
+      passed: true,
+      evidence: `Found: ${file}.`,
+    });
+    expect((await check('CI-02')).run(ctx).passed).toBe(true);
+    expect((await check('CI-03')).run(ctx).passed).toBe(true);
+  });
+
   test('CI-01 passes with a root Jenkinsfile', async () => {
     const ctx = fakeContext({ Jenkinsfile: 'pipeline { agent any }' });
     expect((await check('CI-01')).run(ctx).passed).toBe(true);
