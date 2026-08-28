@@ -12,8 +12,8 @@ dogfoods its own scanner: it must always score **L4** (`npm run scan`).
 ## Layout
 
 - `packages/cli/` — the scanner. TypeScript, ESM, **zero runtime deps**.
-  - `src/checks/` — one file per dimension (see `.cursor/rules/checks.mdc`)
-  - `src/score.ts` — the maturity model (levels L0–L4)
+  - `packages/cli/src/checks/` — one file per dimension (see `.cursor/rules/checks.mdc`)
+  - `packages/cli/src/score.ts` — the maturity model (levels L0–L4)
 - `docs/` — the VitePress guide. `docs/guide/measure-and-improve.md` holds
   the check catalog with one `{#<check-id>}` anchor per check.
 - `plugins/` — one directory per tool (`cursor/`, `claude-code/`, …), plus
@@ -26,14 +26,14 @@ dogfoods its own scanner: it must always score **L4** (`npm run scan`).
 
 ## Build & test
 
-- `npm test` — builds the CLI (`tsup`), typechecks `src/` and the
-  packaging-level consumer smoke test (`test/types/smoke.ts`, imports from
+- `npm test` — builds the CLI (`tsup`), typechecks `packages/cli/src/` and the
+  packaging-level consumer smoke test (`packages/cli/test/types/smoke.ts`, imports from
   `dist/`, not `src/`), then runs vitest.
 - `npm run lint` — Biome (lints + checks formatting).
 - `npm run scan` — self-audit; must report L4.
 - `npm run docs:build` — builds the guide; must pass (dead links fail it).
-- `npm run bench` (in `packages/cli/`) — scan-time benchmark against a
-  synthetic large repo; use it before/after touching `scan.ts`.
+- `npm run bench` — scan-time benchmark against a synthetic large repo; use it
+  before/after touching `packages/cli/src/scan.ts`.
 - Tests MUST pass before any commit.
 
 ## Non-negotiable conventions
@@ -43,7 +43,7 @@ dogfoods its own scanner: it must always score **L4** (`npm run scan`).
 - `packages/cli` keeps **zero runtime dependencies** (fast `npx`, no supply
   chain surface). Dev dependencies are fine.
 - The maturity model lives in three places that must change together:
-  `src/score.ts` (implementation), `docs/guide/maturity-model.md` (levels
+  `packages/cli/src/score.ts` (implementation), `docs/guide/maturity-model.md` (levels
   + dimension point totals), `docs/guide/measure-and-improve.md` (check
   catalog). `packages/cli/test/docs.test.ts` and
   `packages/cli/test/maturity-sync.test.ts` enforce that check IDs, points,
